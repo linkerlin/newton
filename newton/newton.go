@@ -10,8 +10,8 @@ const ReleaseVersion = "0.0.1"
 
 type Newton struct {
 	Config      *config.Config
-	Log         Logger
-	SetLogLevel func(Level)
+	Log         cstream.Logger
+	SetLogLevel func(cstream.Level)
 }
 
 func New(c *config.Config) *Newton {
@@ -19,7 +19,7 @@ func New(c *config.Config) *Newton {
 		c = config.New()
 	}
 
-	l, setlevel := newLogger("newton")
+	l, setlevel := cstream.NewLogger("newton")
 	return &Newton{
 		Config:      c,
 		Log:         l,
