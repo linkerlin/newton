@@ -54,7 +54,7 @@ func (pq *PriorityQueue) Update(item *Item, Value string, TTL int64) {
 }
 
 // Cleans expired items in the queue
-func (pq *PriorityQueue) Expire() {
+func (pq *PriorityQueue) Expire() string {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
@@ -63,5 +63,8 @@ func (pq *PriorityQueue) Expire() {
 	if item.TTL < epoch {
 		item.Index = -1 // for safety
 		*pq = old[0 : n-1]
+		return item.Value
 	}
+
+	return ""
 }
