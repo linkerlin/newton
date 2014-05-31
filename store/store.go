@@ -58,13 +58,11 @@ func (pq *PriorityQueue) Expire() string {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
-
 	epoch := time.Now().Unix()
 	if item.TTL < epoch {
 		item.Index = -1 // for safety
 		*pq = old[0 : n-1]
 		return item.Value
 	}
-
 	return ""
 }
