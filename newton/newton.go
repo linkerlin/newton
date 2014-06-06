@@ -2,7 +2,6 @@ package newton
 
 import (
 	"container/list"
-	"fmt"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"math/rand" // This is temporary
@@ -18,6 +17,7 @@ type Newton struct {
 	Log           cstream.Logger
 	SetLogLevel   func(cstream.Level)
 	ActiveSockets list.List
+	SocketQueue   chan *SocketTimeoutItem
 }
 
 type Connection struct {
@@ -38,16 +38,17 @@ func New(c *config.Config) *Newton {
 
 	// Create a new logger
 	l, setlevel := cstream.NewLogger("newton")
-
+	sq := make(chan *SocketTimeoutItem)
 	return &Newton{
 		Config:      c,
 		Log:         l,
 		SetLogLevel: setlevel,
+		SocketQueue: sq,
 	}
 }
 
 func (n *Newton) isSocketExpired(LastActivity int64, ExpireAt int64) bool {
-	return LastActivity < ExpireAt
+	return ExpireAt-LastActivity >= 10
 }
 
 func (n *Newton) rescheduleSocketTimeout(sc *SocketTimeoutItem) {
@@ -55,7 +56,6 @@ func (n *Newton) rescheduleSocketTimeout(sc *SocketTimeoutItem) {
 		conn := *sc.Conn.Conn
 		conn.Close()
 	} else {
-		fmt.Println(sc.ExpireAt)
 		sc.ExpireAt = time.Now().Unix() + 10
 		n.ActiveSockets.PushBack(sc)
 	}
@@ -68,7 +68,6 @@ func (n *Newton) maintainActiveSockets() {
 		select {
 		case <-tick.C:
 			now := time.Now().Unix()
-			fmt.Println(n.ActiveSockets.Len())
 			for e := n.ActiveSockets.Front(); e != nil; e = e.Next() {
 				ExpireAt := e.Value.(*SocketTimeoutItem).ExpireAt
 				if ExpireAt <= now {
@@ -78,6 +77,8 @@ func (n *Newton) maintainActiveSockets() {
 					break
 				}
 			}
+		case h := <-n.SocketQueue:
+			n.ActiveSockets.PushBack(h)
 		}
 	}
 }
@@ -121,7 +122,7 @@ func (n *Newton) ClientHandler(c *Connection, clientId string) {
 	sc := new(SocketTimeoutItem)
 	sc.Conn = c
 	sc.ExpireAt = time.Now().Unix() + 10
-	n.ActiveSockets.PushBack(sc)
+	n.SocketQueue <- sc
 
 	buffer := make([]byte, 16384)
 	// Read messages from opened connection and
