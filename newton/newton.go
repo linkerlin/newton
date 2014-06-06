@@ -150,6 +150,6 @@ func (n *Newton) readClientStream(c *Connection, buffer []byte) bool {
 		n.Log.Debug("Client connection closed: ", err.Error())
 		return false
 	}
-	n.Log.Debug("Read ", bytesRead, " bytes")
+	n.Log.Info("Read %d byte(s)", bytesRead)
 	return true
 }
