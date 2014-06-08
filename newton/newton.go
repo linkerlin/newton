@@ -2,8 +2,10 @@ package newton
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
+	"github.com/purak/newton/store"
 	"math/rand" // This is temporary
 	"net"
 	"strconv" // This is temporary
@@ -18,6 +20,7 @@ type Newton struct {
 	SetLogLevel   func(cstream.Level)
 	ActiveSockets list.List
 	SocketQueue   chan *SocketTimeoutItem
+	UserStore     *store.UserStore
 }
 
 type Connection struct {
@@ -37,13 +40,15 @@ func New(c *config.Config) *Newton {
 	}
 
 	// Create a new logger
-	l, setlevel := cstream.NewLogger("newton")
+	l, setlevel := cstream.NewLogger("newton.server")
 	sq := make(chan *SocketTimeoutItem)
+	us := store.NewUserStore("data/userstore.gob")
 	return &Newton{
 		Config:      c,
 		Log:         l,
 		SetLogLevel: setlevel,
 		SocketQueue: sq,
+		UserStore:   us,
 	}
 }
 
@@ -124,7 +129,7 @@ func (n *Newton) ClientHandler(c *Connection, clientId string) {
 	sc.ExpireAt = time.Now().Unix() + 10
 	n.SocketQueue <- sc
 
-	buffer := make([]byte, 16384)
+	buffer := make([]byte, 1024)
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
 	conn := *c.Conn
@@ -134,7 +139,7 @@ func (n *Newton) ClientHandler(c *Connection, clientId string) {
 		if err != nil {
 			n.Log.Info(err.Error())
 		}
-		n.Log.Warning(string(buffer))
+		n.Log.Debug(string(buffer))
 		n.Log.Info(clientIP)
 	}
 }
@@ -145,11 +150,17 @@ func (n *Newton) readClientStream(c *Connection, buffer []byte) bool {
 	bytesRead, err := conn.Read(buffer)
 	c.LastActivity = time.Now().Unix()
 
+	var v, k string
+	k = "key"
+	//n.Log.Info("%s %s", &k, &v)
+	t := n.UserStore.Put(&v, &k)
+	fmt.Println(t)
+
 	if err != nil {
 		conn.Close()
 		n.Log.Debug("Client connection closed: ", err.Error())
 		return false
 	}
-	n.Log.Info("Read %d byte(s)", bytesRead)
+	n.Log.Debug("Read %d byte(s)", bytesRead)
 	return true
 }
