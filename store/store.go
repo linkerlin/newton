@@ -27,7 +27,6 @@ import (
 	"bufio"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"github.com/purak/newton/cstream"
 	"io"
 	"os"
@@ -62,10 +61,9 @@ func NewUserStore(filename string) *UserStore {
 	if filename != "" {
 		s.save = make(chan record, saveQueueLength)
 		if err := s.load(filename); err != nil {
-			fmt.Println(err)
-			s.Log.Warning("%s could not be loaded.", filename)
+			s.Log.Warning("An error occcured loading %s: %s", filename, err)
 		}
-		go s.saveLoop(filename)
+		go s.stream(filename)
 	}
 	return s
 }
@@ -90,29 +88,32 @@ func (s *UserStore) Set(key, value *string) error {
 	return nil
 }
 
-func (s *UserStore) Put(value, key *string) error {
-	//for {
-	if err := s.Set(key, value); err == nil {
-		return nil
+// Creates a new key-value pair using Set
+func (s *UserStore) Put(key, value *string) error {
+	if err := s.Set(key, value); err != nil {
+		return err
 	}
-	//}
+
+	// Send to queue for writing to disk
 	if s.save != nil {
 		s.save <- record{*key, *value}
 	}
 	return nil
 }
 
+/* Initializes related data structes, reads from dump and load into the RAM */
 func (s *UserStore) load(filename string) error {
-	f, err := os.Open(filename)
+	fh, err := os.Open(filename)
+	defer fh.Close()
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	b := bufio.NewReader(f)
-	d := gob.NewDecoder(b)
+
+	buff := bufio.NewReader(fh)
+	dec := gob.NewDecoder(buff)
 	for {
 		var r record
-		if err := d.Decode(&r); err == io.EOF {
+		if err := dec.Decode(&r); err == io.EOF {
 			break
 		} else if err != nil {
 			return err
@@ -124,28 +125,31 @@ func (s *UserStore) load(filename string) error {
 	return nil
 }
 
-func (s *UserStore) saveLoop(filename string) {
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+/* Writes the data structure to disk periodically */
+func (s *UserStore) stream(filename string) {
+	fh, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	defer fh.Close()
 	if err != nil {
-		// Produce an error message
-		//log.Println("UserStore:", err)
-		return
+		s.Log.Error("%s could not be read.", filename)
 	}
-	b := bufio.NewWriter(f)
-	e := gob.NewEncoder(b)
-	t := time.NewTicker(saveTimeout * time.Millisecond)
-	defer f.Close()
-	defer b.Flush()
+
+	buff := bufio.NewWriter(fh)
+	defer fh.Close()
+
+	enc := gob.NewEncoder(buff)
+	defer buff.Flush()
+
+	tick := time.NewTicker(saveTimeout * time.Millisecond)
 	for {
 		var err error
 		select {
 		case r := <-s.save:
-			err = e.Encode(r)
-		case <-t.C:
-			err = b.Flush()
+			err = enc.Encode(r)
+		case <-tick.C:
+			err = buff.Flush()
 		}
 		if err != nil {
-
+			s.Log.Error(err.Error())
 		}
 	}
 }

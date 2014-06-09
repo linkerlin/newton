@@ -106,6 +106,15 @@ func (n *Newton) RunServer() {
 		n.Log.Info("Listening on port %s", n.Config.Server.Addr)
 		go n.maintainActiveSockets()
 
+		var v, k string
+		k = "burak"
+		v = "sezer"
+		//n.Log.Info("%s %s", &k, &v)
+		t := n.UserStore.Get(&k, &v)
+		fmt.Println(v)
+		fmt.Println(k)
+		fmt.Println(t)
+
 		for {
 			conn, err := netListen.Accept()
 			c := new(Connection)
@@ -149,12 +158,6 @@ func (n *Newton) readClientStream(c *Connection, buffer []byte) bool {
 	conn := *c.Conn
 	bytesRead, err := conn.Read(buffer)
 	c.LastActivity = time.Now().Unix()
-
-	var v, k string
-	k = "key"
-	//n.Log.Info("%s %s", &k, &v)
-	t := n.UserStore.Put(&v, &k)
-	fmt.Println(t)
 
 	if err != nil {
 		conn.Close()
