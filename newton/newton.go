@@ -3,10 +3,10 @@ package newton
 import (
 	"container/list"
 	"fmt"
-	"github.com/purak/gauss/dhash"
+	"github.com/purak/gauss/dhash" // Main datastore application
+	"github.com/purak/gauss/gconn" // Client library for Gauss
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/store"
 	"math/rand" // This is temporary
 	"net"
 	"strconv" // This is temporary
@@ -21,7 +21,6 @@ type Newton struct {
 	SetLogLevel   func(cstream.Level)
 	ActiveSockets list.List
 	SocketQueue   chan *SocketTimeoutItem
-	UserStore     *store.UserStore
 }
 
 type Connection struct {
@@ -43,13 +42,11 @@ func New(c *config.Config) *Newton {
 	// Create a new logger
 	l, setlevel := cstream.NewLogger("newton.server")
 	sq := make(chan *SocketTimeoutItem)
-	us := store.NewUserStore("data/userstore.gob")
 	return &Newton{
 		Config:      c,
 		Log:         l,
 		SetLogLevel: setlevel,
 		SocketQueue: sq,
-		UserStore:   us,
 	}
 }
 
@@ -109,7 +106,7 @@ func (n *Newton) RunServer() {
 		// Start the database server
 		go n.startDatabase()
 
-		n.Log.Info(n.Config.Database.BroadcastIp)
+		// Remove expired connections
 		go n.maintainActiveSockets()
 
 		for {
@@ -167,12 +164,14 @@ func (n *Newton) readClientStream(c *Connection, buffer []byte) bool {
 
 // Start a Gauss database node
 func (n *Newton) startDatabase() {
+	// TODO: Verbose option
 	listenAddr := fmt.Sprintf("%s:%d", n.Config.Database.ListenIp, n.Config.Database.Port)
 	broadcastAddr := fmt.Sprintf("%s:%d", n.Config.Database.BroadcastIp, n.Config.Database.Port)
-	fmt.Println(listenAddr)
-	fmt.Println(broadcastAddr)
 	s := dhash.NewNodeDir(listenAddr, broadcastAddr, n.Config.Database.LogDir)
+	// Start the database server
 	s.MustStart()
+
+	// Join a database cluster.
 	if n.Config.Database.JoinIp != "" {
 		joinAddr := fmt.Sprintf("%s:%d", n.Config.Database.JoinIp, n.Config.Database.JoinPort)
 		s.MustJoin(joinAddr)
