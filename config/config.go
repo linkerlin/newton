@@ -22,12 +22,12 @@ type ServerInfo struct {
 }
 
 type DatabaseInfo struct {
-	ListenIp    string `toml:"database-listen-ip"`
-	BroadcastIp string `toml:"database-broadcast-ip"`
-	Port        int    `toml:"database-port"`
-	JoinIp      string `toml:"database-join-ip"`
-	JoinPort    int    `toml:"database-join-port"`
-	LogDir      string `toml:"database-log-dir"`
+	ListenIp    string `toml:"listenIp"`
+	BroadcastIp string `toml:"broadcastIp"`
+	Port        int    `toml:"port"`
+	JoinIp      string `toml:"joinIp"`
+	JoinPort    int    `toml:"joinPort"`
+	LogDir      string `toml:"logDir"`
 }
 
 func (c *Config) Load(arguments []string) error {

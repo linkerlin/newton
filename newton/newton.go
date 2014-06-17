@@ -3,6 +3,7 @@ package newton
 import (
 	"container/list"
 	"fmt"
+	"github.com/purak/gauss/dhash"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/store"
@@ -104,16 +105,12 @@ func (n *Newton) RunServer() {
 		// TODO: Override that method
 		defer netListen.Close()
 		n.Log.Info("Listening on port %s", n.Config.Server.Addr)
-		go n.maintainActiveSockets()
 
-		var v, k string
-		k = "burak"
-		v = "sezer"
-		//n.Log.Info("%s %s", &k, &v)
-		t := n.UserStore.Get(&k, &v)
-		fmt.Println(v)
-		fmt.Println(k)
-		fmt.Println(t)
+		// Start the database server
+		go n.startDatabase()
+
+		n.Log.Info(n.Config.Database.BroadcastIp)
+		go n.maintainActiveSockets()
 
 		for {
 			conn, err := netListen.Accept()
@@ -166,4 +163,18 @@ func (n *Newton) readClientStream(c *Connection, buffer []byte) bool {
 	}
 	n.Log.Debug("Read %d byte(s)", bytesRead)
 	return true
+}
+
+// Start a Gauss database node
+func (n *Newton) startDatabase() {
+	listenAddr := fmt.Sprintf("%s:%d", n.Config.Database.ListenIp, n.Config.Database.Port)
+	broadcastAddr := fmt.Sprintf("%s:%d", n.Config.Database.BroadcastIp, n.Config.Database.Port)
+	fmt.Println(listenAddr)
+	fmt.Println(broadcastAddr)
+	s := dhash.NewNodeDir(listenAddr, broadcastAddr, n.Config.Database.LogDir)
+	s.MustStart()
+	if n.Config.Database.JoinIp != "" {
+		joinAddr := fmt.Sprintf("%s:%d", n.Config.Database.JoinIp, n.Config.Database.JoinPort)
+		s.MustJoin(joinAddr)
+	}
 }
