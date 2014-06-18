@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+// FIXME: 32 bit compabilty is a problem for configuration items
+
 const DefaultSystemConfigPath = "data/newton.conf"
 
 type Config struct {
@@ -18,7 +20,9 @@ type Config struct {
 }
 
 type ServerInfo struct {
-	Addr string `toml:"addr"`
+	Addr                   string `toml:"addr"`
+	ClientExpireTime       int64  `toml:"clientExpireTime"`
+	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
 }
 
 type DatabaseInfo struct {
@@ -77,6 +81,8 @@ func (c *Config) LoadFlags(arguments []string) error {
 
 	/* Server parameters */
 	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
+	f.Int64Var(&c.Server.ClientExpireTime, "client-expire-time", c.Server.ClientExpireTime, "")
+	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
 
 	/* Database server parameters */
 	f.StringVar(&c.Database.ListenIp, "database-listen-ip", c.Database.ListenIp, "")
