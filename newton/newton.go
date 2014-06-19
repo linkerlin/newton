@@ -21,6 +21,7 @@ type Newton struct {
 	Log           cstream.Logger
 	SetLogLevel   func(cstream.Level)
 	ActiveClients *store.PriorityQueue
+	ClientQueue   chan *store.Item
 	ConnTable     *ConnTable
 }
 
@@ -52,11 +53,15 @@ func New(c *config.Config) *Newton {
 	// Connection table
 	ct := &ConnTable{m: make(map[string]*ClientItem)}
 
+	// ClientQueue for thread safety
+	cq := make(chan *store.Item, 1000)
+
 	return &Newton{
 		Config:        c,
 		Log:           l,
 		SetLogLevel:   setlevel,
 		ActiveClients: pq,
+		ClientQueue:   cq,
 		ConnTable:     ct,
 	}
 }
@@ -66,6 +71,7 @@ func (n *Newton) rescheduleClientTimeout(clientId string, ci *ClientItem) bool {
 	secondsAgo := time.Now().Unix() - ci.LastAnnounce
 	if secondsAgo < n.Config.Server.ClientExpireTime {
 		newExpireAt := time.Now().Unix() + (n.Config.Server.ClientExpireTime - secondsAgo)
+
 		item := &store.Item{
 			Value: clientId,
 			TTL:   newExpireAt,
@@ -79,29 +85,26 @@ func (n *Newton) rescheduleClientTimeout(clientId string, ci *ClientItem) bool {
 // Maintain currently active clients. This information is required to
 // pass messages correctly.
 func (n *Newton) maintainActiveClients() {
-	tick := time.NewTicker(1 * time.Second)
+	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		select {
 		case <-tick.C:
-			fmt.Println(n.ActiveClients.Len())
 			if n.ActiveClients.Len() > 0 {
 				clientId := n.ActiveClients.Expire()
 				if len(clientId) > 0 {
 					// Read lock
 					n.ConnTable.RLock()
 					clientItem := *n.ConnTable.m[clientId]
-					fmt.Println(clientId)
-					fmt.Println(&clientItem)
 					n.ConnTable.RUnlock()
 					if reAdd := n.rescheduleClientTimeout(clientId, &clientItem); reAdd != true {
 						delete(n.ConnTable.m, clientId)
 					}
 				}
 			}
-			/*case h := <-n.ClientQueue:
+		case item := <-n.ClientQueue:
 			// Add new clients
-			n.ActiveClients.PushBack(h)*/
+			heap.Push(n.ActiveClients, item)
 		}
 	}
 }
@@ -181,7 +184,7 @@ func (n *Newton) ClientHandler(conn net.Conn) {
 				Value: clientId,
 				TTL:   expireAt,
 			}
-			heap.Push(n.ActiveClients, item)
+			n.ClientQueue <- item
 		}
 
 		n.ConnTable.Lock()
