@@ -157,29 +157,24 @@ func (n *Newton) ClientHandler(conn net.Conn) {
 		//  * Check this client id
 		//  * Close connection if the client ip is non-existent.
 
-		// Go's maps are not thread-safe
-		n.ConnTable.RLock()
 		now := time.Now().Unix()
 		// Check size and etc.
 		clientId := string(buffer)
-		if clientItem, ok := n.ConnTable.m[clientId]; ok {
-			n.ConnTable.RUnlock()
+
+		// Go's maps are not thread-safe
+		n.ConnTable.RLock()
+		clientItem, ok := n.ConnTable.m[clientId]
+		n.ConnTable.RUnlock()
+
+		if ok {
 			// Update clientItem struct
 			clientItem.Ip = clientIp
 			clientItem.LastAnnounce = now
-
-			n.ConnTable.Lock()
-			n.ConnTable.m[clientId] = clientItem
-			n.ConnTable.Unlock()
 		} else {
-			n.ConnTable.RUnlock()
 			// Create a new clientItem
 			expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 			clientItem = &ClientItem{Ip: clientIp, LastAnnounce: now}
 
-			n.ConnTable.Lock()
-			n.ConnTable.m[clientId] = clientItem
-			n.ConnTable.Unlock()
 			// Add a new item to priority queue
 			// TODO: Use lock mech. to protect that structure
 			item := &store.Item{
@@ -188,6 +183,10 @@ func (n *Newton) ClientHandler(conn net.Conn) {
 			}
 			heap.Push(n.ActiveClients, item)
 		}
+
+		n.ConnTable.Lock()
+		n.ConnTable.m[clientId] = clientItem
+		n.ConnTable.Unlock()
 
 		// Create or update id&item
 		n.Log.Info(clientId)
