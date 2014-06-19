@@ -21,7 +21,6 @@ type Config struct {
 
 type ServerInfo struct {
 	Addr                   string `toml:"addr"`
-	ClientExpireTime       int64  `toml:"clientExpireTime"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
 }
 
@@ -81,7 +80,6 @@ func (c *Config) LoadFlags(arguments []string) error {
 
 	/* Server parameters */
 	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
-	f.Int64Var(&c.Server.ClientExpireTime, "client-expire-time", c.Server.ClientExpireTime, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
 
 	/* Database server parameters */

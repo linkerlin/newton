@@ -69,9 +69,8 @@ func New(c *config.Config) *Newton {
 // Extend expire time for active clients.
 func (n *Newton) rescheduleClientTimeout(clientId string, ci *ClientItem) bool {
 	secondsAgo := time.Now().Unix() - ci.LastAnnounce
-	if secondsAgo < n.Config.Server.ClientExpireTime {
-		newExpireAt := time.Now().Unix() + (n.Config.Server.ClientExpireTime - secondsAgo)
-
+	if secondsAgo < n.Config.Server.ClientAnnounceInterval {
+		newExpireAt := time.Now().Unix() + (n.Config.Server.ClientAnnounceInterval - secondsAgo)
 		item := &store.Item{
 			Value: clientId,
 			TTL:   newExpireAt,
