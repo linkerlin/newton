@@ -1,7 +1,10 @@
 package newton
 
 import (
+	"bytes"
 	"container/heap"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/purak/gauss/dhash" // Main datastore application
 	"sync"
@@ -17,12 +20,13 @@ const ReleaseVersion = "0.0.1"
 
 // Newton instance struct
 type Newton struct {
-	Config        *config.Config
-	Log           cstream.Logger
-	SetLogLevel   func(cstream.Level)
-	ActiveClients *store.PriorityQueue
-	ClientQueue   chan *store.Item
-	ConnTable     *ConnTable
+	Config          *config.Config
+	Log             cstream.Logger
+	SetLogLevel     func(cstream.Level)
+	ActiveClients   *store.PriorityQueue
+	ClientQueue     chan *store.Item
+	ConnTable       *ConnTable
+	ConnClientTable *ConnClientTable
 }
 
 type ConnTable struct {
@@ -30,10 +34,16 @@ type ConnTable struct {
 	m            map[string]*ClientItem
 }
 
+type ConnClientTable struct {
+	sync.RWMutex // To protect maps
+	c            map[*net.Conn]string
+}
+
 // A container structure for active clients
 type ClientItem struct {
 	Ip           string
 	LastAnnounce int64
+	Conn         *net.Conn
 }
 
 // Create a new Newton instance
@@ -52,17 +62,19 @@ func New(c *config.Config) *Newton {
 
 	// Connection table
 	ct := &ConnTable{m: make(map[string]*ClientItem)}
+	cct := &ConnClientTable{c: make(map[*net.Conn]string)}
 
 	// ClientQueue for thread safety
 	cq := make(chan *store.Item, 1000)
 
 	return &Newton{
-		Config:        c,
-		Log:           l,
-		SetLogLevel:   setlevel,
-		ActiveClients: pq,
-		ClientQueue:   cq,
-		ConnTable:     ct,
+		Config:          c,
+		Log:             l,
+		SetLogLevel:     setlevel,
+		ActiveClients:   pq,
+		ClientQueue:     cq,
+		ConnTable:       ct,
+		ConnClientTable: cct,
 	}
 }
 
@@ -94,10 +106,18 @@ func (n *Newton) maintainActiveClients() {
 				if len(clientId) > 0 {
 					// Read lock
 					n.ConnTable.RLock()
-					clientItem := *n.ConnTable.m[clientId]
+					clientItem := n.ConnTable.m[clientId]
 					n.ConnTable.RUnlock()
-					if reAdd := n.rescheduleClientTimeout(clientId, &clientItem); reAdd != true {
-						delete(n.ConnTable.m, clientId)
+
+					if clientItem != nil {
+						// Check last activity and reschedule the conn if required.
+						if reAdd := n.rescheduleClientTimeout(clientId, clientItem); reAdd != true {
+							conn := *clientItem.Conn
+							delete(n.ConnTable.m, clientId)
+							if err := conn.Close(); err != nil {
+								n.Log.Warning("TCP conn for %s could not be expired.", clientId)
+							}
+						}
 					}
 				}
 			}
@@ -129,7 +149,7 @@ func (n *Newton) RunServer() {
 		// Start the database server
 		go n.startDatabase()
 
-		// Remove expired connections
+		// Expire idle connections or reschedule them
 		go n.maintainActiveClients()
 
 		for {
@@ -145,61 +165,22 @@ func (n *Newton) RunServer() {
 
 // Handles client announce sockets
 func (n *Newton) ClientHandler(conn net.Conn) {
-	buffer := make([]byte, 1024)
+	buff := make([]byte, 1024)
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
-	for n.readClientStream(conn, buffer) {
-		remoteAddr := conn.RemoteAddr().String()
-		clientIp, err := cstream.ParseIP(remoteAddr)
+	for n.readClientStream(buff, conn) {
+		// Remove NULL characters
+		buff = bytes.Trim(buff, "\x00")
+		err := n.parseIncomingMessage(buff, conn)
 		if err != nil {
-			n.Log.Info(err.Error())
+			n.Log.Info("%s", err.Error())
 		}
-		// Client sends its clientId
-		// TODO:
-		//  * Check this client id
-		//  * Close connection if the client ip is non-existent.
-
-		now := time.Now().Unix()
-		// Check size and etc.
-		clientId := string(buffer)
-
-		// Go's maps are not thread-safe
-		n.ConnTable.RLock()
-		clientItem, ok := n.ConnTable.m[clientId]
-		n.ConnTable.RUnlock()
-
-		if ok {
-			// Update clientItem struct
-			clientItem.Ip = clientIp
-			clientItem.LastAnnounce = now
-		} else {
-			// Create a new clientItem
-			expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
-			clientItem = &ClientItem{Ip: clientIp, LastAnnounce: now}
-
-			// Add a new item to priority queue
-			// TODO: Use lock mech. to protect that structure
-			item := &store.Item{
-				Value: clientId,
-				TTL:   expireAt,
-			}
-			n.ClientQueue <- item
-		}
-
-		n.ConnTable.Lock()
-		n.ConnTable.m[clientId] = clientItem
-		n.ConnTable.Unlock()
-
-		// Create or update id&item
-		n.Log.Info(clientId)
-		n.Log.Info(clientIp)
-		conn.Close()
 	}
 }
 
 // Reads incoming messages from connection and sets the bytes to a byte array
-func (n *Newton) readClientStream(conn net.Conn, buffer []byte) bool {
-	bytesRead, err := conn.Read(buffer)
+func (n *Newton) readClientStream(buff []byte, conn net.Conn) bool {
+	bytesRead, err := conn.Read(buff)
 
 	if err != nil {
 		conn.Close()
@@ -208,6 +189,86 @@ func (n *Newton) readClientStream(conn net.Conn, buffer []byte) bool {
 	}
 	n.Log.Debug("Read %d byte(s)", bytesRead)
 	return true
+}
+
+// Parse and dispatch incoming messages
+func (n *Newton) parseIncomingMessage(buff []byte, conn net.Conn) error {
+	var msg interface{}
+	err := json.Unmarshal(buff, &msg)
+	if err != nil {
+		return errors.New("Incoming message could not be unmarshaled.")
+	}
+
+	items := msg.(map[string]interface{})
+
+	// Check type
+	t, ok := items["Type"]
+	if !ok {
+		return errors.New("Unknown message received.")
+	}
+
+	switch {
+	case t == "CreateSession":
+		err = n.createSession(items, conn)
+		if err != nil {
+			conn.Close()
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+// Create a new client session
+func (n *Newton) createSession(data map[string]interface{}, conn net.Conn) error {
+	clientId, ok := data["ClientId"].(string)
+	if !ok {
+		return errors.New("ClientId doesn't exist or invalid.")
+	}
+
+	remoteAddr := conn.RemoteAddr().String()
+	clientIp, err := cstream.ParseIP(remoteAddr)
+	if err != nil {
+		n.Log.Info(clientIp)
+	}
+
+	now := time.Now().Unix()
+	// Go's maps are not thread-safe
+	n.ConnTable.RLock()
+	_, ok = n.ConnTable.m[clientId]
+	n.ConnTable.RUnlock()
+
+	if ok {
+		conn.Close()
+		delete(n.ConnTable.m, clientId)
+		// Update clientItem struct
+		//clientItem.Ip = clientIp
+		//clientItem.LastAnnounce = now
+	}
+
+	// Create a new clientItem
+	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
+	clientItem := &ClientItem{Ip: clientIp, LastAnnounce: now, Conn: &conn}
+
+	// Add a new item to priority queue
+	item := &store.Item{
+		Value: clientId,
+		TTL:   expireAt,
+	}
+	n.ClientQueue <- item
+
+	// Set to ConnTable
+	n.ConnTable.Lock()
+	n.ConnTable.m[clientId] = clientItem
+	n.ConnTable.Unlock()
+
+	// Set to ConnClientTable
+	n.ConnClientTable.Lock()
+	n.ConnClientTable.c[&conn] = clientId
+	n.ConnClientTable.Unlock()
+
+	return nil
 }
 
 // Start a Gauss database node
