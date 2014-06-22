@@ -9,8 +9,10 @@ import (
 	"github.com/purak/gauss/dhash" // Main datastore application
 	"sync"
 	//"github.com/purak/gauss/gconn" // Client library for Gauss
+	"github.com/nu7hatch/gouuid"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
+	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
 	"net"
 	"time"
@@ -36,14 +38,15 @@ type ConnTable struct {
 
 type ConnClientTable struct {
 	sync.RWMutex // To protect maps
-	c            map[*net.Conn]string
+	c            map[*net.Conn]*ClientItem
 }
 
 // A container structure for active clients
 type ClientItem struct {
-	Ip           string
-	LastAnnounce int64
-	Conn         *net.Conn
+	Ip            string
+	LastAnnounce  int64
+	SessionSecret string
+	Conn          *net.Conn
 }
 
 // Create a new Newton instance
@@ -62,7 +65,7 @@ func New(c *config.Config) *Newton {
 
 	// Connection table
 	ct := &ConnTable{m: make(map[string]*ClientItem)}
-	cct := &ConnClientTable{c: make(map[*net.Conn]string)}
+	cct := &ConnClientTable{c: make(map[*net.Conn]*ClientItem)}
 
 	// ClientQueue for thread safety
 	cq := make(chan *store.Item, 1000)
@@ -157,31 +160,45 @@ func (n *Newton) RunServer() {
 			if err != nil {
 				n.Log.Fatal("Client Error: ", err.Error())
 			} else {
-				go n.ClientHandler(conn)
+				go n.ClientHandler(&conn)
 			}
 		}
 	}
 }
 
 // Handles client announce sockets
-func (n *Newton) ClientHandler(conn net.Conn) {
+func (n *Newton) ClientHandler(c *net.Conn) {
+	// Question: What about the bufio package?
 	buff := make([]byte, 1024)
+
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
-	for n.readClientStream(buff, conn) {
+	for n.readClientStream(buff, c) {
 		// Remove NULL characters
 		buff = bytes.Trim(buff, "\x00")
-		err := n.parseIncomingMessage(buff, conn)
-		if err != nil {
-			n.Log.Info("%s", err.Error())
+
+		n.ConnClientTable.RLock()
+		clientItem, ok := n.ConnClientTable.c[c]
+		n.ConnClientTable.RUnlock()
+		if ok && len(buff) == 0 {
+			// Update clientItem struct
+			now := time.Now().Unix()
+			clientItem.LastAnnounce = now
+		} else {
+			err := n.parseIncomingMessage(buff, c)
+			if err != nil {
+				n.Log.Info("%s", err.Error())
+			}
 		}
+		// Clean the buffer
+		buff = make([]byte, 1024)
 	}
 }
 
 // Reads incoming messages from connection and sets the bytes to a byte array
-func (n *Newton) readClientStream(buff []byte, conn net.Conn) bool {
+func (n *Newton) readClientStream(buff []byte, c *net.Conn) bool {
+	conn := *c
 	bytesRead, err := conn.Read(buff)
-
 	if err != nil {
 		conn.Close()
 		n.Log.Debug("Client connection closed: ", err.Error())
@@ -192,7 +209,8 @@ func (n *Newton) readClientStream(buff []byte, conn net.Conn) bool {
 }
 
 // Parse and dispatch incoming messages
-func (n *Newton) parseIncomingMessage(buff []byte, conn net.Conn) error {
+func (n *Newton) parseIncomingMessage(buff []byte, c *net.Conn) error {
+	conn := *c
 	var msg interface{}
 	err := json.Unmarshal(buff, &msg)
 	if err != nil {
@@ -209,28 +227,30 @@ func (n *Newton) parseIncomingMessage(buff []byte, conn net.Conn) error {
 
 	switch {
 	case t == "CreateSession":
-		err = n.createSession(items, conn)
+		m, err := n.createSession(items, c)
 		if err != nil {
+			fmt.Println("create session sicti")
 			conn.Close()
 			return err
 		}
-
+		conn.Write(m)
 	}
 
 	return nil
 }
 
 // Create a new client session
-func (n *Newton) createSession(data map[string]interface{}, conn net.Conn) error {
+func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte, error) {
+	conn := *c
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
-		return errors.New("ClientId doesn't exist or invalid.")
+		return nil, errors.New("ClientId doesn't exist or invalid.")
 	}
 
 	remoteAddr := conn.RemoteAddr().String()
 	clientIp, err := cstream.ParseIP(remoteAddr)
 	if err != nil {
-		n.Log.Info(clientIp)
+		return nil, err
 	}
 
 	now := time.Now().Unix()
@@ -242,14 +262,23 @@ func (n *Newton) createSession(data map[string]interface{}, conn net.Conn) error
 	if ok {
 		conn.Close()
 		delete(n.ConnTable.m, clientId)
-		// Update clientItem struct
-		//clientItem.Ip = clientIp
-		//clientItem.LastAnnounce = now
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
-	clientItem := &ClientItem{Ip: clientIp, LastAnnounce: now, Conn: &conn}
+	secret, err := uuid.NewV4()
+	if err != nil {
+		fmt.Println("uuid yapamadi")
+		conn.Close()
+		return nil, err
+	}
+
+	clientItem := &ClientItem{
+		Ip:            clientIp,
+		LastAnnounce:  now,
+		SessionSecret: secret.String(),
+		Conn:          c,
+	}
 
 	// Add a new item to priority queue
 	item := &store.Item{
@@ -265,10 +294,22 @@ func (n *Newton) createSession(data map[string]interface{}, conn net.Conn) error
 
 	// Set to ConnClientTable
 	n.ConnClientTable.Lock()
-	n.ConnClientTable.c[&conn] = clientId
+	n.ConnClientTable.c[c] = clientItem
 	n.ConnClientTable.Unlock()
 
-	return nil
+	msg := &message.Authenticated{
+		Type:          "Authenticated",
+		SessionSecret: secret.String(),
+	}
+
+	b, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Println("json yapamadi")
+		conn.Close()
+		return nil, err
+	}
+
+	return b, nil
 }
 
 // Start a Gauss database node
