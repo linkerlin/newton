@@ -6,15 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/purak/gauss/dhash" // Main datastore application
-	"sync"
-	//"github.com/purak/gauss/gconn" // Client library for Gauss
 	"github.com/nu7hatch/gouuid"
+	"github.com/purak/gauss/dhash" // Main datastore application
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
+	"github.com/purak/newton/user"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -29,6 +29,7 @@ type Newton struct {
 	ClientQueue     chan *store.Item
 	ConnTable       *ConnTable
 	ConnClientTable *ConnClientTable
+	UserStore       *user.UserStore
 }
 
 type ConnTable struct {
@@ -70,6 +71,9 @@ func New(c *config.Config) *Newton {
 	// ClientQueue for thread safety
 	cq := make(chan *store.Item, 1000)
 
+	// For reaching users on the cluster
+	us := user.New()
+
 	return &Newton{
 		Config:          c,
 		Log:             l,
@@ -78,6 +82,7 @@ func New(c *config.Config) *Newton {
 		ClientQueue:     cq,
 		ConnTable:       ct,
 		ConnClientTable: cct,
+		UserStore:       us,
 	}
 }
 
@@ -229,11 +234,17 @@ func (n *Newton) parseIncomingMessage(buff []byte, c *net.Conn) error {
 	case t == "CreateSession":
 		m, err := n.createSession(items, c)
 		if err != nil {
-			fmt.Println("create session sicti")
 			conn.Close()
 			return err
 		}
 		conn.Write(m)
+	case t == "CreateUser":
+		m, err := n.createUser(items)
+		if err != nil {
+			return err
+		}
+		conn.Write(m)
+		fmt.Println(items)
 	}
 
 	return nil
@@ -268,7 +279,6 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	secret, err := uuid.NewV4()
 	if err != nil {
-		fmt.Println("uuid yapamadi")
 		conn.Close()
 		return nil, err
 	}
@@ -304,8 +314,46 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 
 	b, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Println("json yapamadi")
 		conn.Close()
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// Creates a new user
+func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
+	// Check username
+	username, ok := data["Username"].(string)
+	if !ok {
+		return nil, errors.New("Username is required.")
+	}
+
+	// Check password
+	password, ok := data["Password"].(string)
+	if !ok {
+		return nil, errors.New("Password is required.")
+	}
+
+	// Finally, create a new user
+	err := n.UserStore.Create(username, password)
+
+	if err != nil {
+		return nil, err
+	}
+
+	clientId, err := n.UserStore.CreateUserClient(username)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &message.ClientId{
+		Type:     "ClientId",
+		ClientId: clientId,
+	}
+
+	b, err := json.Marshal(msg)
+	if err != nil {
 		return nil, err
 	}
 
