@@ -219,7 +219,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) error {
 	var msg interface{}
 	err := json.Unmarshal(buff, &msg)
 	if err != nil {
-		return errors.New("Incoming message could not be unmarshaled.")
+		return errors.New("Unknown message.")
 	}
 
 	items := msg.(map[string]interface{})
@@ -232,7 +232,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) error {
 
 	switch {
 	case t == "CreateSession":
-		m, err := n.createSession(items, conn)
+		m, err := n.createSession(items)
 		if err != nil {
 			(*conn).Close()
 			return err
@@ -250,7 +250,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) error {
 }
 
 // Create a new client session
-func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
+func (n *Newton) createSession(data map[string]interface{}) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
 		return nil, errors.New("ClientId doesn't exist or invalid.")
@@ -262,6 +262,8 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 		return nil, err
 	}
 
+	// AUTHENTICATION HERE
+
 	now := time.Now().Unix()
 	// Go's maps are not thread-safe
 	n.ConnTable.RLock()
@@ -269,15 +271,16 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 	n.ConnTable.RUnlock()
 
 	if ok {
-		(*conn).Close()
+		// TODO: Remove from client table
+		// TODO: locking?
 		delete(n.ConnTable.m, clientId)
+		return nil, errors.New("Client has an active connection.")
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	secret, err := uuid.NewV4()
 	if err != nil {
-		(*conn).Close()
 		return nil, err
 	}
 
@@ -312,7 +315,6 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 
 	b, err := json.Marshal(msg)
 	if err != nil {
-		(*conn).Close()
 		return nil, err
 	}
 
