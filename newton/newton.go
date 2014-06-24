@@ -5,9 +5,7 @@ import (
 	"container/heap"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/nu7hatch/gouuid"
-	"github.com/purak/gauss/dhash" // Main datastore application
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
@@ -58,7 +56,7 @@ func New(c *config.Config) *Newton {
 	}
 
 	// Create a new logger
-	l, setlevel := cstream.NewLogger("newton.server")
+	l, setlevel := cstream.NewLogger("newton")
 
 	// Create a priority queue to hold active client connections
 	pq := &store.PriorityQueue{}
@@ -154,9 +152,6 @@ func (n *Newton) RunServer() {
 		defer netListen.Close()
 		n.Log.Info("Listening on port %s", n.Config.Server.Addr)
 
-		// Start the database server
-		go n.startDatabase()
-
 		// Expire idle connections or reschedule them
 		go n.maintainActiveClients()
 
@@ -172,27 +167,34 @@ func (n *Newton) RunServer() {
 }
 
 // Handles client announce sockets
-func (n *Newton) ClientHandler(c *net.Conn) {
+func (n *Newton) ClientHandler(conn *net.Conn) {
 	// Question: What about the bufio package?
 	buff := make([]byte, 1024)
 
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
-	for n.readClientStream(buff, c) {
+	for n.readClientStream(buff, conn) {
 		// Remove NULL characters
 		buff = bytes.Trim(buff, "\x00")
 
 		n.ConnClientTable.RLock()
-		clientItem, ok := n.ConnClientTable.c[c]
+		clientItem, ok := n.ConnClientTable.c[conn]
 		n.ConnClientTable.RUnlock()
 		if ok && len(buff) == 0 {
 			// Update clientItem struct
 			now := time.Now().Unix()
 			clientItem.LastAnnounce = now
 		} else {
-			err := n.parseIncomingMessage(buff, c)
+			err := n.processIncomingMessage(buff, conn)
 			if err != nil {
-				n.Log.Info("%s", err.Error())
+				msg := &message.ErrorMsg{
+					Type: "Error",
+					Body: err.Error(),
+				}
+				b, _ := json.Marshal(msg)
+				// FIXME: Handle serialization errors
+				// Return the error message
+				(*conn).Write(b)
 			}
 		}
 		// Clean the buffer
@@ -201,11 +203,10 @@ func (n *Newton) ClientHandler(c *net.Conn) {
 }
 
 // Reads incoming messages from connection and sets the bytes to a byte array
-func (n *Newton) readClientStream(buff []byte, c *net.Conn) bool {
-	conn := *c
-	bytesRead, err := conn.Read(buff)
+func (n *Newton) readClientStream(buff []byte, conn *net.Conn) bool {
+	bytesRead, err := (*conn).Read(buff)
 	if err != nil {
-		conn.Close()
+		(*conn).Close()
 		n.Log.Debug("Client connection closed: ", err.Error())
 		return false
 	}
@@ -214,8 +215,7 @@ func (n *Newton) readClientStream(buff []byte, c *net.Conn) bool {
 }
 
 // Parse and dispatch incoming messages
-func (n *Newton) parseIncomingMessage(buff []byte, c *net.Conn) error {
-	conn := *c
+func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) error {
 	var msg interface{}
 	err := json.Unmarshal(buff, &msg)
 	if err != nil {
@@ -232,33 +232,31 @@ func (n *Newton) parseIncomingMessage(buff []byte, c *net.Conn) error {
 
 	switch {
 	case t == "CreateSession":
-		m, err := n.createSession(items, c)
+		m, err := n.createSession(items, conn)
 		if err != nil {
-			conn.Close()
+			(*conn).Close()
 			return err
 		}
-		conn.Write(m)
+		(*conn).Write(m)
 	case t == "CreateUser":
 		m, err := n.createUser(items)
 		if err != nil {
 			return err
 		}
-		conn.Write(m)
-		fmt.Println(items)
+		(*conn).Write(m)
 	}
 
 	return nil
 }
 
 // Create a new client session
-func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte, error) {
-	conn := *c
+func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
 		return nil, errors.New("ClientId doesn't exist or invalid.")
 	}
 
-	remoteAddr := conn.RemoteAddr().String()
+	remoteAddr := (*conn).RemoteAddr().String()
 	clientIp, err := cstream.ParseIP(remoteAddr)
 	if err != nil {
 		return nil, err
@@ -271,7 +269,7 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 	n.ConnTable.RUnlock()
 
 	if ok {
-		conn.Close()
+		(*conn).Close()
 		delete(n.ConnTable.m, clientId)
 	}
 
@@ -279,7 +277,7 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	secret, err := uuid.NewV4()
 	if err != nil {
-		conn.Close()
+		(*conn).Close()
 		return nil, err
 	}
 
@@ -287,7 +285,7 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 		Ip:            clientIp,
 		LastAnnounce:  now,
 		SessionSecret: secret.String(),
-		Conn:          c,
+		Conn:          conn,
 	}
 
 	// Add a new item to priority queue
@@ -304,7 +302,7 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 
 	// Set to ConnClientTable
 	n.ConnClientTable.Lock()
-	n.ConnClientTable.c[c] = clientItem
+	n.ConnClientTable.c[conn] = clientItem
 	n.ConnClientTable.Unlock()
 
 	msg := &message.Authenticated{
@@ -314,7 +312,7 @@ func (n *Newton) createSession(data map[string]interface{}, c *net.Conn) ([]byte
 
 	b, err := json.Marshal(msg)
 	if err != nil {
-		conn.Close()
+		(*conn).Close()
 		return nil, err
 	}
 
@@ -335,43 +333,32 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		return nil, errors.New("Password is required.")
 	}
 
-	// Finally, create a new user
-	err := n.UserStore.Create(username, password)
+	_, existed := n.UserStore.Get(username)
+	if !existed {
+		// Finally, create a new user
+		err := n.UserStore.Create(username, password)
 
-	if err != nil {
-		return nil, err
-	}
+		if err != nil {
+			return nil, err
+		}
 
-	clientId, err := n.UserStore.CreateUserClient(username)
-	if err != nil {
-		return nil, err
-	}
+		clientId, err := n.UserStore.CreateUserClient(username)
+		if err != nil {
+			return nil, err
+		}
 
-	msg := &message.ClientId{
-		Type:     "ClientId",
-		ClientId: clientId,
-	}
+		msg := &message.ClientId{
+			Type:     "ClientId",
+			ClientId: clientId,
+		}
 
-	b, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
+		b, err := json.Marshal(msg)
+		if err != nil {
+			return nil, err
+		}
 
-	return b, nil
-}
-
-// Start a Gauss database node
-func (n *Newton) startDatabase() {
-	// TODO: Verbose option
-	listenAddr := fmt.Sprintf("%s:%d", n.Config.Database.ListenIp, n.Config.Database.Port)
-	broadcastAddr := fmt.Sprintf("%s:%d", n.Config.Database.BroadcastIp, n.Config.Database.Port)
-	s := dhash.NewNodeDir(listenAddr, broadcastAddr, n.Config.Database.LogDir)
-	// Start the database server
-	s.MustStart()
-
-	// Join a database cluster.
-	if n.Config.Database.JoinIp != "" {
-		joinAddr := fmt.Sprintf("%s:%d", n.Config.Database.JoinIp, n.Config.Database.JoinPort)
-		s.MustJoin(joinAddr)
+		return b, nil
+	} else {
+		return nil, errors.New("Already exist.")
 	}
 }

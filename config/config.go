@@ -16,21 +16,11 @@ type Config struct {
 	ShowHelp    bool
 	ShowVersion bool
 	Server      ServerInfo
-	Database    DatabaseInfo
 }
 
 type ServerInfo struct {
 	Addr                   string `toml:"addr"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
-}
-
-type DatabaseInfo struct {
-	ListenIp    string `toml:"listenIp"`
-	BroadcastIp string `toml:"broadcastIp"`
-	Port        int    `toml:"port"`
-	JoinIp      string `toml:"joinIp"`
-	JoinPort    int    `toml:"joinPort"`
-	LogDir      string `toml:"logDir"`
 }
 
 func (c *Config) Load(arguments []string) error {
@@ -81,14 +71,6 @@ func (c *Config) LoadFlags(arguments []string) error {
 	/* Server parameters */
 	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
-
-	/* Database server parameters */
-	f.StringVar(&c.Database.ListenIp, "database-listen-ip", c.Database.ListenIp, "")
-	f.StringVar(&c.Database.BroadcastIp, "database-broadcast-ip", c.Database.BroadcastIp, "")
-	f.IntVar(&c.Database.Port, "database-port", c.Database.Port, "")
-	f.StringVar(&c.Database.JoinIp, "database-join-ip", c.Database.JoinIp, "")
-	f.IntVar(&c.Database.JoinPort, "database-join-port", c.Database.JoinPort, "")
-	f.StringVar(&c.Database.LogDir, "database-log-dir", c.Database.LogDir, "")
 
 	if err := f.Parse(arguments); err != nil {
 		return err

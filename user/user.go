@@ -1,15 +1,18 @@
 package user
 
 import (
-	"fmt"
+	//"fmt"
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
+	"github.com/purak/newton/cstream"
 )
 
 type UserStore struct {
-	Conn *gconn.Conn
+	Conn        *gconn.Conn
+	SetLogLevel func(cstream.Level)
+	Log         cstream.Logger
 }
 
 type User struct {
@@ -25,10 +28,16 @@ type UserClient struct {
 
 // Creates a new socket for reaching User items
 func New() *UserStore {
+	// Create a new logger
+	l, setlevel := cstream.NewLogger("newton")
+
 	// FIXME: Hardcoded, temporarily
 	conn := gconn.MustConn("localhost:9191")
-	us := &UserStore{Conn: conn}
-	return us
+	return &UserStore{
+		Conn:        conn,
+		Log:         l,
+		SetLogLevel: setlevel,
+	}
 }
 
 // Creates a new user item on Gauss database
@@ -54,8 +63,17 @@ func (u *UserStore) Create(username, password string) error {
 	// Put it in the database
 	u.Conn.Put(murmur.HashString(username), bytes)
 
-	fmt.Println(user)
 	return nil
+}
+
+// Gets a user from database
+func (u *UserStore) Get(username string) (user User, existed bool) {
+	key := murmur.HashString(username)
+	// Try to fetch the user
+	data, existed := u.Conn.Get(key)
+	// To unserialize it
+	common.MustJSONDecode(data, &user)
+	return user, existed
 }
 
 // Creates a new ClientId
