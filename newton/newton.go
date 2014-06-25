@@ -180,22 +180,19 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 		n.ConnClientTable.RLock()
 		clientItem, ok := n.ConnClientTable.c[conn]
 		n.ConnClientTable.RUnlock()
+
+		now := time.Now().Unix()
 		if ok && len(buff) == 0 {
-			// Update clientItem struct
-			now := time.Now().Unix()
+			// Heartbeat message, update clientItem
 			clientItem.LastAnnounce = now
 		} else {
-			err := n.processIncomingMessage(buff, conn)
-			if err != nil {
-				msg := &message.ErrorMsg{
-					Type: "Error",
-					Body: err.Error(),
-				}
-				b, _ := json.Marshal(msg)
-				// FIXME: Handle serialization errors
-				// Return the error message
-				(*conn).Write(b)
+			if ok {
+				// This is an authenticated client, update last activity data.
+				clientItem.LastAnnounce = now
 			}
+			// If the message type is CreateSession, the connection record
+			// will be created.
+			go n.processIncomingMessage(buff, conn)
 		}
 		// Clean the buffer
 		buff = make([]byte, 1024)
@@ -215,42 +212,59 @@ func (n *Newton) readClientStream(buff []byte, conn *net.Conn) bool {
 }
 
 // Parse and dispatch incoming messages
-func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) error {
-	var msg interface{}
-	err := json.Unmarshal(buff, &msg)
+func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
+	var request interface{}
+	var response []byte
+	var err_ string
+	closeConn := false
+
+	err := json.Unmarshal(buff, &request)
 	if err != nil {
-		return errors.New("Unknown message.")
-	}
+		err_ = "Unknown message."
+		goto onError
+	} else {
+		items := request.(map[string]interface{})
 
-	items := msg.(map[string]interface{})
-
-	// Check type
-	t, ok := items["Type"]
-	if !ok {
-		return errors.New("Unknown message received.")
-	}
-
-	switch {
-	case t == "CreateSession":
-		m, err := n.createSession(items)
-		if err != nil {
-			(*conn).Close()
-			return err
+		// Check type
+		t, ok := items["Type"]
+		if !ok {
+			err_ = "Unknown message received."
+			goto onError
 		}
-		(*conn).Write(m)
-	case t == "CreateUser":
-		m, err := n.createUser(items)
-		if err != nil {
-			return err
+
+		switch {
+		case t == "CreateSession":
+			response, err = n.createSession(items, conn)
+			closeConn = true
+		case t == "CreateUser":
+			response, err = n.createUser(items)
 		}
-		(*conn).Write(m)
+
+		if err != nil {
+			err_ = err.Error()
+			goto onError
+		} else {
+			(*conn).Write(response)
+		}
 	}
 
-	return nil
+	// Sends error message
+onError:
+	errMsg := &message.ErrorMsg{
+		Type: "Error",
+		Body: err_,
+	}
+	b, _ := json.Marshal(errMsg)
+	// FIXME: Handle serialization errors
+	// Return the error message
+	(*conn).Write(b)
+	if closeConn {
+		(*conn).Close()
+	}
 }
 
 // Create a new client session
-func (n *Newton) createSession(data map[string]interface{}) ([]byte, error) {
+func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
 		return nil, errors.New("ClientId doesn't exist or invalid.")
@@ -271,9 +285,15 @@ func (n *Newton) createSession(data map[string]interface{}) ([]byte, error) {
 	n.ConnTable.RUnlock()
 
 	if ok {
-		// TODO: Remove from client table
-		// TODO: locking?
+		// Remove the previous connection
+		n.ConnClientTable.Lock()
+		delete(n.ConnClientTable.c, conn)
+		n.ConnClientTable.Unlock()
+
+		n.ConnTable.Lock()
 		delete(n.ConnTable.m, clientId)
+		n.ConnTable.Unlock()
+
 		return nil, errors.New("Client has an active connection.")
 	}
 
