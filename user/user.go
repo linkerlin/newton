@@ -64,6 +64,7 @@ func (u *UserStore) Create(username, password string) error {
 	// Serialize the user
 	bytes := common.MustJSONEncode(user)
 	// Put it in the database
+	// TODO: this function must have a return type
 	u.Conn.Put(murmur.HashString(username), bytes)
 
 	return nil
@@ -83,11 +84,11 @@ func (u *UserStore) Get(username string) (user *User, existed bool) {
 }
 
 // Creates a new ClientId
-func (u *UserStore) CreateUserClient(username string) (string, error) {
+func (u *UserStore) CreateUserClient(username string) ([]byte, error) {
 	// Create a UUID.
 	unique, err := uuid.NewV4()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	tmp := unique.String() + username
@@ -98,7 +99,7 @@ func (u *UserStore) CreateUserClient(username string) (string, error) {
 	// Put it in the database
 	u.Conn.SubPut(murmur.HashString(username), bytes, nil)
 
-	return string(clientId), nil
+	return clientId, nil
 }
 
 // Gets UserClient items for the given key
@@ -106,4 +107,11 @@ func (u *UserStore) GetUserClient(username string) []common.Item {
 	key := murmur.HashString(username)
 	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
 	return items
+}
+
+// TODO: this function must have a return type
+// Gets UserClient items for the given key
+func (u *UserStore) DeleteUserClient(username string, clientId []byte) {
+	key := murmur.HashString(username)
+	u.Conn.SubDel(key, clientId)
 }

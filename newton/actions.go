@@ -81,6 +81,7 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 		SessionSecret: secret.String(),
 	}
 
+	// FIXME: Remove boilterplate code
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return nil, err
@@ -103,7 +104,6 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		return nil, errors.New("Password is required.")
 	}
 
-	n.UserStore.GetUserClient(username)
 	_, existed := n.UserStore.Get(username)
 	if !existed {
 		// Finally, create a new user
@@ -123,6 +123,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 			ClientId: clientId,
 		}
 
+		// FIXME: Remove boilterplate code
 		b, err := json.Marshal(msg)
 		if err != nil {
 			return nil, err
@@ -132,4 +133,36 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	} else {
 		return nil, errors.New("Already exist.")
 	}
+}
+
+// Creates a new client for the user
+func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
+	// Check username
+	username, ok := data["Username"].(string)
+	if !ok {
+		return nil, errors.New("Username is required.")
+	}
+
+	clients := n.UserStore.GetUserClient(username)
+	if len(clients) >= n.Config.Database.MaxUserClient {
+		return nil, errors.New("MaxUserClient limit exceeded.")
+	}
+
+	clientId, err := n.UserStore.CreateUserClient(username)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &message.ClientId{
+		Type:     "ClientId",
+		ClientId: clientId,
+	}
+
+	// FIXME: Remove boilterplate code
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }

@@ -9,7 +9,7 @@ type Authenticated struct {
 // Defines a message for ClientId
 type ClientId struct {
 	Type     string
-	ClientId string
+	ClientId []byte
 }
 
 // Defines an error message

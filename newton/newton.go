@@ -236,6 +236,8 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 			closeConn = true
 		case t == "CreateUser":
 			response, err = n.createUser(items)
+		case t == "CreateUserClient":
+			response, err = n.createUserClient(items)
 		}
 
 		if err != nil {
