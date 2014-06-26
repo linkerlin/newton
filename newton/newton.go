@@ -68,7 +68,7 @@ func New(c *config.Config) *Newton {
 	cq := make(chan *store.Item, 1000)
 
 	// For reaching users on the cluster
-	us := user.New()
+	us := user.New(c)
 
 	return &Newton{
 		Config:          c,

@@ -1,15 +1,16 @@
 package user
 
 import (
-	//"fmt"
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
+	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 )
 
 type UserStore struct {
+	Config      *config.Config
 	Conn        *gconn.Conn
 	SetLogLevel func(cstream.Level)
 	Log         cstream.Logger
@@ -27,16 +28,23 @@ type UserClient struct {
 }
 
 // Creates a new socket for reaching User items
-func New() *UserStore {
+func New(c *config.Config) *UserStore {
+	// Create a new configuration state
+	if c == nil {
+		c = config.New()
+	}
+
+	// New database connection
+	conn := gconn.MustConn(c.Database.Addr)
+
 	// Create a new logger
 	l, setlevel := cstream.NewLogger("newton")
 
-	// FIXME: Hardcoded, temporarily
-	conn := gconn.MustConn("localhost:9191")
 	return &UserStore{
 		Conn:        conn,
 		Log:         l,
 		SetLogLevel: setlevel,
+		Config:      c,
 	}
 }
 
@@ -66,7 +74,7 @@ func (u *UserStore) Create(username, password string) error {
 	return nil
 }
 
-// Gets a user from database
+// Gets an user from database
 func (u *UserStore) Get(username string) (user User, existed bool) {
 	key := murmur.HashString(username)
 	// Try to fetch the user
@@ -96,7 +104,12 @@ func (u *UserStore) CreateUserClient(username string) (string, error) {
 	// Serialize the user
 	bytes := common.MustJSONEncode(uc)
 	// Put it in the database
-	u.Conn.Put(murmur.HashString(username), bytes)
+	u.Conn.SubPut(murmur.HashString(username), bytes, nil)
 
 	return clientId, nil
+}
+
+// Gets UserClient items for the given key
+func (u *UserStore) GetUserClient(username string) {
+
 }

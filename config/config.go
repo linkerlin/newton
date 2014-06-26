@@ -16,11 +16,17 @@ type Config struct {
 	ShowHelp    bool
 	ShowVersion bool
 	Server      ServerInfo
+	Database    DatabaseInfo
 }
 
 type ServerInfo struct {
 	Addr                   string `toml:"addr"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
+}
+
+type DatabaseInfo struct {
+	Addr          string `toml:"addr"`
+	MaxUserClient int    `toml:"maxUserClient"`
 }
 
 func (c *Config) Load(arguments []string) error {
@@ -63,14 +69,18 @@ func (c *Config) LoadFlags(arguments []string) error {
 	f := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	f.SetOutput(ioutil.Discard)
 
-	/* Generic configuration  parameters */
+	// Generic configuration  parameters
 	f.BoolVar(&c.ShowHelp, "h", false, "")
 	f.BoolVar(&c.ShowHelp, "help", false, "")
 	f.BoolVar(&c.ShowVersion, "version", false, "")
 
-	/* Server parameters */
+	// Server parameters
 	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
+
+	// Database parameters
+	f.StringVar(&c.Database.Addr, "database-addr", c.Database.Addr, "")
+	f.IntVar(&c.Database.MaxUserClient, "max-user-client", c.Database.MaxUserClient, "")
 
 	if err := f.Parse(arguments); err != nil {
 		return err
