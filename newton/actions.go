@@ -103,6 +103,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		return nil, errors.New("Password is required.")
 	}
 
+	n.UserStore.GetUserClient(username)
 	_, existed := n.UserStore.Get(username)
 	if !existed {
 		// Finally, create a new user

@@ -22,11 +22,6 @@ type User struct {
 	Secret   []byte
 }
 
-type UserClient struct {
-	Username string
-	ClientId string
-}
-
 // Creates a new socket for reaching User items
 func New(c *config.Config) *UserStore {
 	// Create a new configuration state
@@ -75,11 +70,14 @@ func (u *UserStore) Create(username, password string) error {
 }
 
 // Gets an user from database
-func (u *UserStore) Get(username string) (user User, existed bool) {
+func (u *UserStore) Get(username string) (user *User, existed bool) {
 	key := murmur.HashString(username)
 	// Try to fetch the user
 	data, existed := u.Conn.Get(key)
 	// To unserialize it
+	if !existed {
+		return nil, existed
+	}
 	common.MustJSONDecode(data, &user)
 	return user, existed
 }
@@ -93,23 +91,19 @@ func (u *UserStore) CreateUserClient(username string) (string, error) {
 	}
 
 	tmp := unique.String() + username
-	clientId := string(murmur.HashString(tmp))
+	clientId := murmur.HashString(tmp)
 
-	// New user item
-	uc := &UserClient{
-		Username: username,
-		ClientId: clientId,
-	}
-
-	// Serialize the user
-	bytes := common.MustJSONEncode(uc)
+	// Serialize the clientId
+	bytes := common.MustJSONEncode(clientId)
 	// Put it in the database
 	u.Conn.SubPut(murmur.HashString(username), bytes, nil)
 
-	return clientId, nil
+	return string(clientId), nil
 }
 
 // Gets UserClient items for the given key
-func (u *UserStore) GetUserClient(username string) {
-
+func (u *UserStore) GetUserClient(username string) []common.Item {
+	key := murmur.HashString(username)
+	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
+	return items
 }
