@@ -11,7 +11,7 @@ type Authenticated struct {
 type ClientId struct {
 	Type     string
 	Status   int
-	ClientId []byte
+	ClientId string
 }
 
 // Defines an error message

@@ -232,51 +232,50 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	var ok bool
 	closeConn := false
 
+	// Sends error message
+	onerror := func() {
+		errMsg := &message.ErrorMsg{
+			Type:   typ,
+			Status: status,
+			Body:   err_,
+		}
+		b, _ := json.Marshal(errMsg)
+		// FIXME: Handle serialization errors
+		// Return the error message
+		(*conn).Write(b)
+		if closeConn {
+			(*conn).Close()
+		}
+	}
+
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
 		err_ = "Unknown message."
 		status = BadMessage
-		goto onError
+		onerror()
 	} else {
 		items := request.(map[string]interface{})
-
 		// Check type
 		typ, ok = items["Type"].(string)
 		if !ok {
 			err_ = "Unknown message received."
-			goto onError
+			onerror()
 		}
 
 		switch {
-		case typ == "CreateSession":
-			response, status, err = n.createSession(items, conn)
+		case typ == "Authenticate":
+			response, status, err = n.authenticate(items, conn)
 			closeConn = true
 		case typ == "CreateUser":
 			response, status, err = n.createUser(items)
 		case typ == "CreateUserClient":
 			response, status, err = n.createUserClient(items)
 		}
-
 		if err != nil {
 			err_ = err.Error()
-			goto onError
+			onerror()
 		} else {
 			(*conn).Write(response)
 		}
-	}
-
-	// Sends error message
-onError:
-	errMsg := &message.ErrorMsg{
-		Type:   typ,
-		Status: status,
-		Body:   err_,
-	}
-	b, _ := json.Marshal(errMsg)
-	// FIXME: Handle serialization errors
-	// Return the error message
-	(*conn).Write(b)
-	if closeConn {
-		(*conn).Close()
 	}
 }

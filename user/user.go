@@ -84,26 +84,32 @@ func (u *UserStore) Get(username string) (user *User, existed bool) {
 }
 
 // Creates a new ClientId
-func (u *UserStore) CreateUserClient(username string) ([]byte, error) {
+func (u *UserStore) CreateUserClient(username string) (string, error) {
 	// Create a UUID.
 	unique, err := uuid.NewV4()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-
-	tmp := unique.String() + username
-	clientId := murmur.HashString(tmp)
-
-	// Serialize the clientId
-	bytes := common.MustJSONEncode(clientId)
+	clientId := username + "@" + unique.String()
 	// Put it in the database
-	u.Conn.SubPut(murmur.HashString(username), bytes, nil)
-
+	u.Conn.SubPut(murmur.HashString(username), []byte(clientId), nil)
 	return clientId, nil
 }
 
+// Checks clientId existence
+func (u *UserStore) CheckUserClient(username, clientId string) bool {
+	key := murmur.HashString(username)
+	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
+	for _, item := range items {
+		if string(item.Key) == clientId {
+			return true
+		}
+	}
+	return false
+}
+
 // Gets UserClient items for the given key
-func (u *UserStore) GetUserClient(username string) []common.Item {
+func (u *UserStore) GetUserClients(username string) []common.Item {
 	key := murmur.HashString(username)
 	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
 	return items
