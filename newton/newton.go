@@ -16,6 +16,19 @@ import (
 
 const ReleaseVersion = "0.0.1"
 
+// 2xx => Success codes
+// 1xx => Error codes
+
+const (
+	Success                = 200 // Generic success code
+	Failed                 = 100 // Generic fail code
+	AuthenticationFailed   = 101
+	AuthenticationRequired = 102
+	ServerError            = 103
+	BadMessage             = 104 // Broken message
+
+)
+
 // Newton instance struct
 type Newton struct {
 	Config          *config.Config
@@ -214,30 +227,34 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	var request interface{}
 	var response []byte
 	var err_ string
+	var status int
+	var typ string
+	var ok bool
 	closeConn := false
 
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
 		err_ = "Unknown message."
+		status = BadMessage
 		goto onError
 	} else {
 		items := request.(map[string]interface{})
 
 		// Check type
-		t, ok := items["Type"]
+		typ, ok = items["Type"].(string)
 		if !ok {
 			err_ = "Unknown message received."
 			goto onError
 		}
 
 		switch {
-		case t == "CreateSession":
-			response, err = n.createSession(items, conn)
+		case typ == "CreateSession":
+			response, status, err = n.createSession(items, conn)
 			closeConn = true
-		case t == "CreateUser":
-			response, err = n.createUser(items)
-		case t == "CreateUserClient":
-			response, err = n.createUserClient(items)
+		case typ == "CreateUser":
+			response, status, err = n.createUser(items)
+		case typ == "CreateUserClient":
+			response, status, err = n.createUserClient(items)
 		}
 
 		if err != nil {
@@ -251,8 +268,9 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	// Sends error message
 onError:
 	errMsg := &message.ErrorMsg{
-		Type: "Error",
-		Body: err_,
+		Type:   typ,
+		Status: status,
+		Body:   err_,
 	}
 	b, _ := json.Marshal(errMsg)
 	// FIXME: Handle serialization errors

@@ -12,16 +12,16 @@ import (
 )
 
 // Create a new client session
-func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
+func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]byte, int, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
-		return nil, errors.New("ClientId doesn't exist or invalid.")
+		return nil, BadMessage, errors.New("ClientId doesn't exist or invalid.")
 	}
 
 	remoteAddr := (*conn).RemoteAddr().String()
 	clientIp, err := cstream.ParseIP(remoteAddr)
 	if err != nil {
-		return nil, err
+		return nil, ServerError, err
 	}
 
 	// AUTHENTICATION HERE
@@ -42,14 +42,14 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 		delete(n.ConnTable.m, clientId)
 		n.ConnTable.Unlock()
 
-		return nil, errors.New("Client has an active connection.")
+		return nil, Failed, errors.New("Client has an active connection.")
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	secret, err := uuid.NewV4()
 	if err != nil {
-		return nil, err
+		return nil, ServerError, err
 	}
 
 	clientItem := &ClientItem{
@@ -84,24 +84,24 @@ func (n *Newton) createSession(data map[string]interface{}, conn *net.Conn) ([]b
 	// FIXME: Remove boilterplate code
 	b, err := json.Marshal(msg)
 	if err != nil {
-		return nil, err
+		return nil, ServerError, err
 	}
 
-	return b, nil
+	return b, Success, nil
 }
 
 // Creates a new user
-func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
+func (n *Newton) createUser(data map[string]interface{}) ([]byte, int, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return nil, errors.New("Username is required.")
+		return nil, BadMessage, errors.New("Username is required.")
 	}
 
 	// Check password
 	password, ok := data["Password"].(string)
 	if !ok {
-		return nil, errors.New("Password is required.")
+		return nil, BadMessage, errors.New("Password is required.")
 	}
 
 	_, existed := n.UserStore.Get(username)
@@ -110,12 +110,12 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		err := n.UserStore.Create(username, password)
 
 		if err != nil {
-			return nil, err
+			return nil, ServerError, err
 		}
 
 		clientId, err := n.UserStore.CreateUserClient(username)
 		if err != nil {
-			return nil, err
+			return nil, ServerError, err
 		}
 
 		msg := &message.ClientId{
@@ -126,31 +126,31 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		// FIXME: Remove boilterplate code
 		b, err := json.Marshal(msg)
 		if err != nil {
-			return nil, err
+			return nil, ServerError, err
 		}
 
-		return b, nil
+		return b, Success, nil
 	} else {
-		return nil, errors.New("Already exist.")
+		return nil, Failed, errors.New("Already exist.")
 	}
 }
 
 // Creates a new client for the user
-func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
+func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, int, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return nil, errors.New("Username is required.")
+		return nil, BadMessage, errors.New("Username is required.")
 	}
 
 	clients := n.UserStore.GetUserClient(username)
 	if len(clients) >= n.Config.Database.MaxUserClient {
-		return nil, errors.New("MaxUserClient limit exceeded.")
+		return nil, Failed, errors.New("MaxUserClient limit exceeded.")
 	}
 
 	clientId, err := n.UserStore.CreateUserClient(username)
 	if err != nil {
-		return nil, err
+		return nil, ServerError, err
 	}
 
 	msg := &message.ClientId{
@@ -161,8 +161,8 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	// FIXME: Remove boilterplate code
 	b, err := json.Marshal(msg)
 	if err != nil {
-		return nil, err
+		return nil, ServerError, err
 	}
 
-	return b, nil
+	return b, Success, nil
 }
