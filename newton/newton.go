@@ -182,6 +182,23 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 	// Question: What about the bufio package?
 	buff := make([]byte, 1024)
 
+	// Close the connection if no message received.
+	go func() {
+		tick := time.NewTicker(5 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				// FIXME: This is an ugly hack.
+				t := bytes.Trim(buff, "\x00")
+				if len(t) == 0 {
+					(*conn).Close()
+					return
+				}
+			}
+		}
+	}()
+
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
 	for n.readClientStream(buff, conn) {
@@ -252,6 +269,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	if err != nil {
 		err_ = "Unknown message."
 		status = BadMessage
+		closeConn = true
 		onerror()
 	} else {
 		items := request.(map[string]interface{})
@@ -259,6 +277,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 		typ, ok = items["Type"].(string)
 		if !ok {
 			err_ = "Unknown message received."
+			closeConn = true
 			onerror()
 		}
 
