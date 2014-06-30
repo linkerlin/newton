@@ -132,7 +132,7 @@ func (n *Newton) maintainActiveClients() {
 							conn := *clientItem.Conn
 							delete(n.ConnTable.m, clientId)
 							if err := conn.Close(); err != nil {
-								n.Log.Warning("TCP conn for %s could not be expired.", clientId)
+								n.Log.Warning("TCP conn for %s could not be expired: %s", clientId, err.Error())
 							}
 						}
 					}
@@ -183,15 +183,14 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 	buff := make([]byte, 1024)
 
 	// Close the connection if no message received.
+	var isReal bool
 	go func() {
 		tick := time.NewTicker(5 * time.Second)
 		defer tick.Stop()
 		for {
 			select {
 			case <-tick.C:
-				// FIXME: This is an ugly hack.
-				t := bytes.Trim(buff, "\x00")
-				if len(t) == 0 {
+				if !isReal {
 					(*conn).Close()
 					return
 				}
@@ -202,6 +201,8 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
 	for n.readClientStream(buff, conn) {
+		isReal = true // the clients send messages
+
 		// Remove NULL characters
 		buff = bytes.Trim(buff, "\x00")
 
