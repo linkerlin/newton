@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/nu7hatch/gouuid"
+	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
@@ -37,7 +39,6 @@ func (n *Newton) authenticate(data map[string]interface{}, conn *net.Conn) ([]by
 	}
 
 	// AUTHENTICATION HERE
-
 	user, ok := n.UserStore.Get(username)
 	if !ok {
 		return nil, Failed, errors.New("User could not be found.")
@@ -106,11 +107,17 @@ func (n *Newton) authenticate(data map[string]interface{}, conn *net.Conn) ([]by
 				SessionSecret: ss.String(),
 			}
 
-			// FIXME: Remove boilterplate code
+			// FIXME: Remove boilerplate code
 			b, err := json.Marshal(msg)
 			if err != nil {
 				return nil, ServerError, err
 			}
+
+			// Event Listening experient
+			r := n.UserStore.Conn.RegisterListener()
+			r.Put(gconn.Key("bar"), "foo")
+			h, _ := r.Get(gconn.Key("bar"))
+			fmt.Println(h)
 
 			return b, Success, nil
 		} else {
