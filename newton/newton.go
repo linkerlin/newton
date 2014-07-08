@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
+	"github.com/purak/newton/cluster"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
@@ -39,6 +40,7 @@ type Newton struct {
 	ConnTable       *ConnTable
 	ConnClientTable *ConnClientTable
 	UserStore       *user.UserStore
+	ClusterStore    *cluster.ClusterStore
 }
 
 type ConnTable struct {
@@ -83,6 +85,9 @@ func New(c *config.Config) *Newton {
 	// For reaching users on the cluster
 	us := user.New(c)
 
+	// For talking to other newton servers
+	cl := cluster.New(c)
+
 	return &Newton{
 		Config:          c,
 		Log:             l,
@@ -92,6 +97,7 @@ func New(c *config.Config) *Newton {
 		ConnTable:       ct,
 		ConnClientTable: cct,
 		UserStore:       us,
+		ClusterStore:    cl,
 	}
 }
 
@@ -166,6 +172,8 @@ func (n *Newton) RunServer() {
 		// Expire idle connections or reschedule them
 		go n.maintainActiveClients()
 
+		// Listen incoming connections and start a goroutine to handle
+		// clients
 		for {
 			conn, err := netListen.Accept()
 			if err != nil {
