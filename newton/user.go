@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/nu7hatch/gouuid"
-	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
@@ -112,12 +110,6 @@ func (n *Newton) authenticate(data map[string]interface{}, conn *net.Conn) ([]by
 			if err != nil {
 				return nil, ServerError, err
 			}
-
-			// Event Listening experient
-			r := n.UserStore.Conn.RegisterListener()
-			r.Put(gconn.Key("bar"), "foo")
-			h, _ := r.Get(gconn.Key("bar"))
-			fmt.Println(h)
 
 			return b, Success, nil
 		} else {
