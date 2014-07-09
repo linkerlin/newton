@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"
@@ -49,7 +50,7 @@ func New(c *config.Config) *ClusterStore {
 }
 
 // Creates a new server item on Gauss database
-func (c *ClusterStore) Create(identity, password string) error {
+func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, internalPort string) error {
 	// Create a unique salt string.
 	salt, err := uuid.NewV4()
 	if err != nil {
@@ -61,9 +62,13 @@ func (c *ClusterStore) Create(identity, password string) error {
 	secret := murmur.HashString(tmp)
 	// New server item
 	server := &Server{
-		Identity: identity,
-		Salt:     saltStr,
-		Secret:   secret,
+		Identity:     identity,
+		WanIp:        wanIp,
+		WanPort:      wanPort,
+		InternalIp:   internalIp,
+		InternalPort: internalPort,
+		Salt:         saltStr,
+		Secret:       secret,
 	}
 
 	// Serialize the server item
@@ -86,4 +91,17 @@ func (c *ClusterStore) Get(identity string) (server *Server, existed bool) {
 	}
 	common.MustJSONDecode(data, &server)
 	return server, existed
+}
+
+// Delete the server item from database
+func (c *ClusterStore) Delete(identity string) error {
+	key := murmur.HashString(identity)
+	c.Conn.Del(key)
+	// FIXME: This can be dangerous
+	// Check the key
+	_, existed := c.Conn.Get(key)
+	if existed {
+		return errors.New("Deleting is failed.")
+	}
+	return nil
 }

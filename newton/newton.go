@@ -260,7 +260,7 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 
 	// Sends error message
 	onerror := func() {
-		errMsg := &message.ErrorMsg{
+		errMsg := &message.Dummy{
 			Type:   typ,
 			Status: status,
 			Body:   err_,
@@ -298,6 +298,13 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 			response, status, err = n.createUser(items)
 		case typ == "CreateUserClient":
 			response, status, err = n.createUserClient(items)
+		case typ == "CreateServer":
+			response, status, err = n.createServer(items)
+		case typ == "DeleteServer":
+			response, status, err = n.deleteServer(items)
+		case typ == "AuthenticateServer":
+			response, status, err = n.authenticateServer(items, conn)
+			closeConn = true
 		}
 		if err != nil {
 			err_ = err.Error()
