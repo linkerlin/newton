@@ -7,6 +7,8 @@ import (
 	"net"
 )
 
+// Functions to manipulate and manage ClusterStore data.
+
 // Creates a new server item on the cluster
 func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) {
 	// Sending the identity and password is a necessity.
@@ -19,10 +21,9 @@ func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) 
 		return nil, BadMessage, errors.New("Password is required.")
 	}
 
-	// TODO: Handle error conditions for that parameters
-
 	// The following variables is optional but to define a server properly
-	// the system admininstrator has to send one of that kind of IP addresses at least
+	// the system admininstrator has to send one of that kind of IP addresses at least.
+
 	// WanIP is the external IP address for the server
 	wanIp, _ := data["WanIp"].(string)
 	wanPort, _ := data["WanPort"].(string)
@@ -30,6 +31,13 @@ func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) 
 	internalIp, _ := data["InternalIp"].(string)
 	internalPort, _ := data["InternalPort"].(string)
 
+	if wanIp == "" || wanPort == "" {
+		if internalIp == "" || internalPort == "" {
+			return nil, BadMessage, errors.New("Missing IP or port data.")
+		}
+	}
+
+	// Firstly, check the key existence
 	_, existed := n.ClusterStore.Get(identity)
 	if !existed {
 		// Finally, create a new server on the cluster
@@ -56,7 +64,7 @@ func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) 
 	}
 }
 
-// Removes a server from cluster
+// Deletes a server from cluster
 func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, int, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
