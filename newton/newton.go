@@ -55,7 +55,6 @@ type ConnClientTable struct {
 
 // A container structure for active clients
 type ClientItem struct {
-	Ip            string
 	LastAnnounce  int64
 	SessionSecret string
 	Conn          *net.Conn
@@ -251,17 +250,17 @@ func (n *Newton) readClientStream(buff []byte, conn *net.Conn) bool {
 // Parse and dispatch incoming messages
 func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	var request interface{}
-	var response []byte
+	var response interface{}
 	var err_ string
 	var status int
-	var typ string
+	var t string
 	var ok bool
 	closeConn := false
 
 	// Sends error message
 	onerror := func() {
 		errMsg := &message.Dummy{
-			Type:   typ,
+			Type:   t,
 			Status: status,
 			Body:   err_,
 		}
@@ -283,29 +282,38 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 	} else {
 		items := request.(map[string]interface{})
 		// Check type
-		typ, ok = items["Type"].(string)
+		t, ok = items["Type"].(string)
 		if !ok {
 			err_ = "Unknown message received."
 			closeConn = true
 			onerror()
 		}
 
+		// Dispatch incoming messages and run related functions
 		switch {
-		case typ == "Authenticate":
-			response, status, err = n.authenticate(items, conn)
+		case t == "AuthenticateUser":
+			response, status, err = n.authenticateUser(items, conn)
+			// Close connection on error
 			closeConn = true
-		case typ == "CreateUser":
+		case t == "CreateUser":
 			response, status, err = n.createUser(items)
-		case typ == "CreateUserClient":
+		case t == "CreateUserClient":
 			response, status, err = n.createUserClient(items)
-		case typ == "CreateServer":
+		case t == "CreateServer":
 			response, status, err = n.createServer(items)
-		case typ == "DeleteServer":
+		case t == "DeleteServer":
 			response, status, err = n.deleteServer(items)
-		case typ == "AuthenticateServer":
+		case t == "AuthenticateServer":
 			response, status, err = n.authenticateServer(items, conn)
+			// Close connection on error
 			closeConn = true
 		}
+
+		response, err := json.Marshal(response)
+		if err != nil {
+			status = BadMessage
+		}
+
 		if err != nil {
 			err_ = err.Error()
 			onerror()

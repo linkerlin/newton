@@ -1,7 +1,6 @@
 package newton
 
 import (
-	"encoding/json"
 	"errors"
 	"github.com/purak/newton/message"
 	"net"
@@ -10,7 +9,7 @@ import (
 // Functions to manipulate and manage ClusterStore data.
 
 // Creates a new server item on the cluster
-func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) {
+func (n *Newton) createServer(data map[string]interface{}) (interface{}, int, error) {
 	// Sending the identity and password is a necessity.
 	identity, ok := data["Identity"].(string)
 	if !ok {
@@ -52,20 +51,14 @@ func (n *Newton) createServer(data map[string]interface{}) ([]byte, int, error) 
 			Status: Success,
 		}
 
-		// FIXME: Remove boilterplate code
-		b, err := json.Marshal(msg)
-		if err != nil {
-			return nil, ServerError, err
-		}
-
-		return b, Success, nil
+		return msg, Success, nil
 	} else {
 		return nil, Failed, errors.New("Already exist.")
 	}
 }
 
 // Deletes a server from cluster
-func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, int, error) {
+func (n *Newton) deleteServer(data map[string]interface{}) (interface{}, int, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
 		return nil, BadMessage, errors.New("Identity is required.")
@@ -80,15 +73,26 @@ func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, int, error) 
 		Status: Success,
 	}
 
-	// FIXME: Remove boilterplate code
-	b, err := json.Marshal(msg)
-	if err != nil {
-		return nil, ServerError, err
-	}
-
-	return b, Success, nil
+	return msg, Success, nil
 }
 
-func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) ([]byte, int, error) {
-	return nil, Success, nil
+// Authenticates servers to communicate with each others
+func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) (interface{}, int, error) {
+	identity, ok := data["Identity"].(string)
+	if !ok {
+		return nil, BadMessage, errors.New("Identity doesn't exist or invalid.")
+	}
+	password, ok := data["Password"].(string)
+	if !ok {
+		return nil, BadMessage, errors.New("Password doesn't exist or invalid.")
+	}
+
+	server, ok := n.ClusterStore.Get(identity)
+	if !ok {
+		return nil, Failed, errors.New("Identity could not be found.")
+	} else {
+		// We use identity as clientId for servers
+		clientId := identity
+		return n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
+	}
 }
