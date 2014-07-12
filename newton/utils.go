@@ -19,7 +19,8 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		return nil, AuthenticationFailed, errors.New("Authentication Failed")
 	}
 
-	now := time.Now().Unix()
+	// Authentication is done after that time
+
 	// Go's maps are not thread-safe
 	n.ConnTable.RLock()
 	_, ok := n.ConnTable.m[clientId]
@@ -45,6 +46,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		return nil, ServerError, err
 	}
 
+	now := time.Now().Unix()
 	clientItem := &ClientItem{
 		LastAnnounce:  now,
 		SessionSecret: ss.String(),
@@ -73,12 +75,6 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		Status:        Success,
 		SessionSecret: ss.String(),
 	}
-
-	// FIXME: Remove boilerplate code
-	//b, err := json.Marshal(msg)
-	//if err != nil {
-	//	return nil, ServerError, err
-	//}
 
 	return msg, Success, nil
 }

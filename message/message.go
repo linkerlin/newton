@@ -24,7 +24,7 @@ type Dummy struct {
 // Defines an authentication request message between newton servers
 type AuthenticateServer struct {
 	Type     string
-	Idendity string
+	Identity string
 	Password string
 }
 
