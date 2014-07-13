@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
+	//"fmt"
 	"github.com/purak/newton/cluster"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
@@ -17,9 +18,10 @@ import (
 
 const ReleaseVersion = "0.0.1"
 
+// Operation Codes are defined here
+
 // 2xx => Success codes
 // 1xx => Error codes
-
 const (
 	Success                = 200 // Generic success code
 	Failed                 = 100 // Generic fail code
@@ -32,15 +34,16 @@ const (
 
 // Newton instance struct
 type Newton struct {
-	Config          *config.Config
-	Log             cstream.Logger
-	SetLogLevel     func(cstream.Level)
-	ActiveClients   *store.PriorityQueue
-	ClientQueue     chan *store.Item
-	ConnTable       *ConnTable
-	ConnClientTable *ConnClientTable
-	UserStore       *user.UserStore
-	ClusterStore    *cluster.ClusterStore
+	Config            *config.Config
+	Log               cstream.Logger
+	SetLogLevel       func(cstream.Level)
+	ActiveClients     *store.PriorityQueue
+	ClientQueue       chan *store.Item
+	ConnTable         *ConnTable
+	ConnClientTable   *ConnClientTable
+	UserStore         *user.UserStore
+	ClusterStore      *cluster.ClusterStore
+	InternalConnTable *InternalConnTable
 }
 
 type ConnTable struct {
@@ -58,6 +61,18 @@ type ClientItem struct {
 	LastAnnounce  int64
 	SessionSecret string
 	Conn          *net.Conn
+}
+
+// Stores opened sockets for other newton instances
+type InternalConnTable struct {
+	sync.RWMutex // To protect maps
+	i            map[string]*ServerItem
+}
+
+type ServerItem struct {
+	Conn          *net.Conn
+	Outgoing      chan []byte
+	SessionSecret string
 }
 
 // Create a new Newton instance
@@ -86,17 +101,19 @@ func New(c *config.Config) *Newton {
 
 	// For talking to other newton servers
 	cl := cluster.New(c)
+	ict := &InternalConnTable{i: make(map[string]*ServerItem)}
 
 	return &Newton{
-		Config:          c,
-		Log:             l,
-		SetLogLevel:     setlevel,
-		ActiveClients:   pq,
-		ClientQueue:     cq,
-		ConnTable:       ct,
-		ConnClientTable: cct,
-		UserStore:       us,
-		ClusterStore:    cl,
+		Config:            c,
+		Log:               l,
+		SetLogLevel:       setlevel,
+		ActiveClients:     pq,
+		ClientQueue:       cq,
+		ConnTable:         ct,
+		ConnClientTable:   cct,
+		UserStore:         us,
+		ClusterStore:      cl,
+		InternalConnTable: ict,
 	}
 }
 
@@ -207,7 +224,7 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 
 	// Read messages from opened connection and
 	// send them to incoming messages channel.
-	for n.readClientStream(buff, conn) {
+	for n.readConn(buff, conn) {
 		isReal = true // the clients send messages
 
 		// Remove NULL characters
@@ -228,7 +245,7 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 			}
 			// If the message type is CreateSession, the connection record
 			// will be created.
-			go n.processIncomingMessage(buff, conn)
+			go n.dispatchMessages(buff, conn)
 		}
 		// Clean the buffer
 		buff = make([]byte, 1024)
@@ -236,7 +253,7 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 }
 
 // Reads incoming messages from connection and sets the bytes to a byte array
-func (n *Newton) readClientStream(buff []byte, conn *net.Conn) bool {
+func (n *Newton) readConn(buff []byte, conn *net.Conn) bool {
 	bytesRead, err := (*conn).Read(buff)
 	if err != nil {
 		(*conn).Close()
@@ -248,7 +265,7 @@ func (n *Newton) readClientStream(buff []byte, conn *net.Conn) bool {
 }
 
 // Parse and dispatch incoming messages
-func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
+func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
 	var response interface{}
 	var err_ string
@@ -307,6 +324,9 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 			response, status, err = n.authenticateServer(items, conn)
 			// Close connection on error
 			closeConn = true
+		case t == "Authenticated":
+			// This is an internal connection between newton instances
+			response, status, err = n.startInternalCommunication(items, conn)
 		}
 
 		response, err := json.Marshal(response)
@@ -321,4 +341,64 @@ func (n *Newton) processIncomingMessage(buff []byte, conn *net.Conn) {
 			(*conn).Write(response)
 		}
 	}
+}
+
+// Opens and listens a socket between newton instances
+func (n *Newton) internalConnection(identity string) {
+	// Get the instance
+	server, ok := n.ClusterStore.Get(identity)
+	if !ok {
+		n.Log.Warning("%s could not be found on cluster.", identity)
+	} else {
+		var serverAddr string
+		if server.WanIp != "" {
+			serverAddr = server.WanIp + ":" + server.WanPort
+		} else {
+			serverAddr = server.InternalIp + ":" + server.InternalPort
+		}
+		// Make a connection between the instance and us.
+		conn, err := net.Dial("tcp4", serverAddr)
+		if err != nil {
+			n.Log.Warning("Dial failed: %s", err.Error())
+		} else {
+			defer conn.Close()
+
+			n.InternalConnTable.RLock()
+			serverItem, ok := n.InternalConnTable.i[identity]
+			n.InternalConnTable.RUnlock()
+
+			n.InternalConnTable.Lock()
+			if ok {
+				// TODO: Handle error cases?
+				(*serverItem.Conn).Close()
+				// Remove existed connection
+				delete(n.InternalConnTable.i, identity)
+			} else {
+				server := &ServerItem{
+					Conn:     &conn,
+					Outgoing: make(chan []byte, 100), // How about 100?
+				}
+				n.InternalConnTable.i[identity] = server
+			}
+			n.InternalConnTable.Unlock()
+			// Send authentication credentials
+			go n.authenticateServerReq(n.Config.Server.Identity, n.Config.Server.Password, &conn)
+			// Use identity as clientId for newton instances
+			n.Log.Info("Waiting data from %s", serverAddr)
+			buff := make([]byte, 1024)
+			for n.readConn(buff, &conn) {
+				buff = bytes.Trim(buff, "\x00")
+				go n.dispatchMessages(buff, &conn)
+			}
+		}
+	}
+}
+
+// Writes a message throught an opened connection
+func (n *Newton) writeMessage(msg interface{}, conn *net.Conn) {
+	response, err := json.Marshal(msg)
+	if err != nil {
+		panic(err.Error())
+	}
+	(*conn).Write(response)
 }

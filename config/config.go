@@ -22,6 +22,8 @@ type Config struct {
 type ServerInfo struct {
 	Addr                   string `toml:"addr"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
+	Identity               string `toml:"identity"`
+	Password               string `toml:"password"`
 }
 
 type DatabaseInfo struct {
@@ -77,6 +79,8 @@ func (c *Config) LoadFlags(arguments []string) error {
 	// Server parameters
 	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
+	f.StringVar(&c.Server.Identity, "identity", c.Server.Identity, "")
+	f.StringVar(&c.Server.Password, "password", c.Server.Password, "")
 
 	// Database parameters
 	f.StringVar(&c.Database.Addr, "database-addr", c.Database.Addr, "")

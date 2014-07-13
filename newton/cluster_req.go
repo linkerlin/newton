@@ -2,12 +2,13 @@ package newton
 
 import (
 	"github.com/purak/newton/message"
+	"net"
 )
 
 // Functions to manipulate ClusterStore data on a remote server
 
 // Sends a message to create a new server
-func (n *Newton) newServerReq() (interface{}, int, error) {
+func (n *Newton) createServerReq() (interface{}, int, error) {
 	// Dummy values for test
 	msg := &message.CreateServer{
 		Type:         "CreateServer",
@@ -32,11 +33,11 @@ func (n *Newton) deleteServerReq(identity string) (interface{}, int, error) {
 }
 
 // Sends a message for authentication
-func (n *Newton) authenticateServerReq(identity, password string) (interface{}, int, error) {
+func (n *Newton) authenticateServerReq(identity, password string, conn *net.Conn) {
 	msg := &message.AuthenticateServer{
 		Type:     "AuthenticateServer",
 		Identity: identity,
 		Password: password,
 	}
-	return msg, Success, nil
+	n.writeMessage(msg, conn)
 }

@@ -96,3 +96,41 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 		return n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
 	}
 }
+
+// Sets some basic variables and other things for internal communication between newton instances
+func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) (interface{}, int, error) {
+	// FIXME: Exception handling?
+	status, ok := data["Status"].(int)
+	if !ok {
+		return nil, BadMessage, errors.New("Broken authentication message.")
+	}
+	if status != Success {
+		return nil, AuthenticationFailed, errors.New("Authentication failed.")
+	}
+
+	// TODO: Check existence
+	secret, _ := data["SessionSecret"].(string)
+	var identity string
+	var value ServerItem
+
+	n.InternalConnTable.RLock()
+	for key, value := range n.InternalConnTable.i {
+		if value.Conn == conn {
+			identity = key
+			break
+		}
+	}
+	n.InternalConnTable.RUnlock()
+
+	n.InternalConnTable.Lock()
+	value.SessionSecret = secret
+	n.InternalConnTable.i[identity] = &value
+	n.InternalConnTable.Unlock()
+
+	msg := &message.Dummy{
+		Type:   "Dummy",
+		Status: Success,
+	}
+
+	return msg, Success, nil
+}
