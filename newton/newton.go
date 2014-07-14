@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
-	//"fmt"
+	"errors"
 	"github.com/purak/newton/cluster"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
@@ -188,6 +188,8 @@ func (n *Newton) RunServer() {
 		// Expire idle connections or reschedule them
 		go n.maintainActiveClients()
 
+		// go n.internalConnection("lpms")
+
 		// Listen incoming connections and start a goroutine to handle
 		// clients
 		for {
@@ -270,12 +272,13 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var response interface{}
 	var err_ string
 	var status int
-	var t string
+	var t string = "Dummy"
 	var ok bool
 	closeConn := false
 
 	// Sends error message
-	onerror := func() {
+	onerror := func(err error) {
+		err_ = err.Error()
 		errMsg := &message.Dummy{
 			Type:   t,
 			Status: status,
@@ -290,21 +293,29 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		}
 	}
 
+	failedExp := errors.New("Unknown or broken message.")
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
-		err_ = "Unknown message."
 		status = BadMessage
 		closeConn = true
-		onerror()
-	} else {
+		onerror(failedExp)
+	} else if request != nil {
 		items := request.(map[string]interface{})
+		// We need int but encoding/json returns float64 for numbers
+		// This is a pretty bad hack but it works :|
+		var s float64
+		s, ok = items["Status"].(float64)
+		if ok {
+			items["Status"] = int(s)
+		}
 		// Check type
 		t, ok = items["Type"].(string)
 		if !ok {
-			err_ = "Unknown message received."
 			closeConn = true
-			onerror()
+			onerror(failedExp)
 		}
+
+		// TODO: We need a better message and error handling mech.
 
 		// Dispatch incoming messages and run related functions
 		switch {
@@ -316,8 +327,8 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			response, status, err = n.createUser(items)
 		case t == "CreateUserClient":
 			response, status, err = n.createUserClient(items)
-		case t == "CreateServer":
-			response, status, err = n.createServer(items)
+		//case t == "CreateServer":
+		//	response, status, err = n.createServer(items)
 		case t == "DeleteServer":
 			response, status, err = n.deleteServer(items)
 		case t == "AuthenticateServer":
@@ -325,20 +336,24 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			// Close connection on error
 			closeConn = true
 		case t == "Authenticated":
+			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
 			response, status, err = n.startInternalCommunication(items, conn)
-		}
-
-		response, err := json.Marshal(response)
-		if err != nil {
-			status = BadMessage
+		case t == "Dummy":
+			// FIXME: This is not cool!
+			return
 		}
 
 		if err != nil {
-			err_ = err.Error()
-			onerror()
+			onerror(err)
 		} else {
-			(*conn).Write(response)
+			response, err := json.Marshal(response)
+			if err != nil {
+				status = BadMessage
+				onerror(err)
+			} else {
+				(*conn).Write(response)
+			}
 		}
 	}
 }
@@ -351,11 +366,12 @@ func (n *Newton) internalConnection(identity string) {
 		n.Log.Warning("%s could not be found on cluster.", identity)
 	} else {
 		var serverAddr string
-		if server.WanIp != "" {
-			serverAddr = server.WanIp + ":" + server.WanPort
-		} else {
+		if server.InternalIp != "" {
 			serverAddr = server.InternalIp + ":" + server.InternalPort
+		} else {
+			serverAddr = server.WanIp + ":" + server.WanPort
 		}
+
 		// Make a connection between the instance and us.
 		conn, err := net.Dial("tcp4", serverAddr)
 		if err != nil {
@@ -382,6 +398,7 @@ func (n *Newton) internalConnection(identity string) {
 			}
 			n.InternalConnTable.Unlock()
 			// Send authentication credentials
+			n.Log.Info("Sending authentication request to %s", serverAddr)
 			go n.authenticateServerReq(n.Config.Server.Identity, n.Config.Server.Password, &conn)
 			// Use identity as clientId for newton instances
 			n.Log.Info("Waiting data from %s", serverAddr)

@@ -4,14 +4,15 @@ import (
 	"errors"
 	"github.com/purak/newton/message"
 	"net"
+	"time"
 )
 
 // Functions to manipulate and manage ClusterStore data.
 
 // Creates a new server item on the cluster
-func (n *Newton) createServer(data map[string]interface{}) (interface{}, int, error) {
+func (n *Newton) createServer() (interface{}, int, error) {
 	// Sending the identity and password is a necessity.
-	identity, ok := data["Identity"].(string)
+	/*identity, ok := data["Identity"].(string)
 	if !ok {
 		return nil, BadMessage, errors.New("Identity is required.")
 	}
@@ -34,7 +35,15 @@ func (n *Newton) createServer(data map[string]interface{}) (interface{}, int, er
 		if internalIp == "" || internalPort == "" {
 			return nil, BadMessage, errors.New("Missing IP or port data.")
 		}
-	}
+	}*/
+
+	// Fake parameters
+	identity := "lpms"
+	password := "hadron"
+	internalIp := "127.0.0.1"
+	internalPort := "8080"
+	wanIp := "8.8.8.8"
+	wanPort := "5000"
 
 	// Firstly, check the key existence
 	_, existed := n.ClusterStore.Get(identity)
@@ -82,6 +91,8 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 	if !ok {
 		return nil, BadMessage, errors.New("Identity doesn't exist or invalid.")
 	}
+	n.Log.Info("Received authentication request from %s", identity)
+
 	password, ok := data["Password"].(string)
 	if !ok {
 		return nil, BadMessage, errors.New("Password doesn't exist or invalid.")
@@ -93,7 +104,11 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 	} else {
 		// We use identity as clientId for servers
 		clientId := identity
-		return n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
+		response, status, err := n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
+		if status == Success {
+			n.Log.Info("Opened a session for '%s'", identity)
+		}
+		return response, status, err
 	}
 }
 
@@ -111,26 +126,55 @@ func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *n
 	// TODO: Check existence
 	secret, _ := data["SessionSecret"].(string)
 	var identity string
-	var value ServerItem
+	var value *ServerItem
 
+	// Find the table item
 	n.InternalConnTable.RLock()
-	for key, value := range n.InternalConnTable.i {
+	for identity, value = range n.InternalConnTable.i {
 		if value.Conn == conn {
-			identity = key
 			break
 		}
 	}
 	n.InternalConnTable.RUnlock()
 
+	// Set SessionSecret and update the table
 	n.InternalConnTable.Lock()
 	value.SessionSecret = secret
-	n.InternalConnTable.i[identity] = &value
+	n.InternalConnTable.i[identity] = value
 	n.InternalConnTable.Unlock()
 
+	n.Log.Info("Session opened on %s", identity)
+	// Write outgoing messages to connection
+	go n.consumeOutgoingChannel(value.Outgoing, conn)
+	// I'm alive
+	go n.heartbeat(value.Outgoing)
 	msg := &message.Dummy{
 		Type:   "Dummy",
 		Status: Success,
 	}
-
 	return msg, Success, nil
+}
+
+// Consume outgoing messages channel for internal connections
+func (n *Newton) consumeOutgoingChannel(outgoing chan []byte, conn *net.Conn) {
+	for {
+		select {
+		case buff := <-outgoing:
+			(*conn).Write(buff)
+		}
+	}
+}
+
+// I'm alive function
+func (n *Newton) heartbeat(outgoing chan []byte) {
+	tick := time.NewTicker(4 * time.Second)
+	defer tick.Stop()
+	// Empty message
+	hb := make([]byte, 1)
+	for {
+		select {
+		case <-tick.C:
+			outgoing <- hb
+		}
+	}
 }
