@@ -2,4 +2,8 @@ TODO for 0.0.1
 ==============
 * Better message handling
 * Better exception handling
+* Unit testing
+* Design documentation
+* Coding convention document
+* Travis entegration
 
