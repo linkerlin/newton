@@ -46,11 +46,13 @@ type Newton struct {
 	InternalConnTable *InternalConnTable
 }
 
+// Stores active client sessions by clientId
 type ConnTable struct {
 	sync.RWMutex // To protect maps
 	m            map[string]*ClientItem
 }
 
+// Stores active client sessions by pointer of net.Conn
 type ConnClientTable struct {
 	sync.RWMutex // To protect maps
 	c            map[*net.Conn]*ClientItem
@@ -69,6 +71,7 @@ type InternalConnTable struct {
 	i            map[string]*ServerItem
 }
 
+// Stores opened sessions on the other newton instances
 type ServerItem struct {
 	Conn          *net.Conn
 	Outgoing      chan []byte
@@ -379,17 +382,19 @@ func (n *Newton) internalConnection(identity string) {
 		} else {
 			defer conn.Close()
 
+			// Try to get currently opened session
 			n.InternalConnTable.RLock()
 			serverItem, ok := n.InternalConnTable.i[identity]
 			n.InternalConnTable.RUnlock()
 
 			n.InternalConnTable.Lock()
 			if ok {
+				// Remove and close existed connection
 				// TODO: Handle error cases?
 				(*serverItem.Conn).Close()
-				// Remove existed connection
 				delete(n.InternalConnTable.i, identity)
 			} else {
+				// Create a new ServerItem for the new connection without SessionSecret
 				server := &ServerItem{
 					Conn:     &conn,
 					Outgoing: make(chan []byte, 100), // How about 100?
@@ -398,9 +403,11 @@ func (n *Newton) internalConnection(identity string) {
 			}
 			n.InternalConnTable.Unlock()
 			// Send authentication credentials
+			// Remember that we use identity as clientId for newton instances
 			n.Log.Info("Sending authentication request to %s", serverAddr)
 			go n.authenticateServerReq(n.Config.Server.Identity, n.Config.Server.Password, &conn)
-			// Use identity as clientId for newton instances
+
+			// Read chunks from the connection and start a goroutine parse and fire related functions
 			n.Log.Info("Waiting data from %s", serverAddr)
 			buff := make([]byte, 1024)
 			for n.readConn(buff, &conn) {

@@ -10,6 +10,7 @@ import (
 	"github.com/purak/newton/cstream"
 )
 
+// ClusterStore is a database object for maintaining newton instances on Gauss
 type ClusterStore struct {
 	Config      *config.Config
 	Conn        *gconn.Conn
