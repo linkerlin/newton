@@ -1,7 +1,6 @@
 package newton
 
 import (
-	"errors"
 	"github.com/purak/newton/message"
 	"net"
 	"time"
@@ -10,7 +9,7 @@ import (
 // Functions to manipulate and manage ClusterStore data.
 
 // Creates a new server item on the cluster
-func (n *Newton) createServer() (interface{}, int, error) {
+func (n *Newton) createServer() ([]byte, error) {
 	// Sending the identity and password is a necessity.
 	/*identity, ok := data["Identity"].(string)
 	if !ok {
@@ -52,7 +51,7 @@ func (n *Newton) createServer() (interface{}, int, error) {
 		err := n.ClusterStore.Create(identity, password, wanIp, wanPort, internalIp, internalPort)
 
 		if err != nil {
-			return nil, ServerError, err
+			return n.errorMessage(ServerError, err.Error())
 		}
 
 		msg := &message.Dummy{
@@ -60,21 +59,21 @@ func (n *Newton) createServer() (interface{}, int, error) {
 			Status: Success,
 		}
 
-		return msg, Success, nil
+		return n.msgToByte(msg)
 	} else {
-		return nil, Failed, errors.New("Already exist.")
+		return n.errorMessage(Failed, "Already exist.")
 	}
 }
 
 // Deletes a server from cluster
-func (n *Newton) deleteServer(data map[string]interface{}) (interface{}, int, error) {
+func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Identity is required.")
+		return n.errorMessage(BadMessage, "Identity required.")
 	}
 	err := n.ClusterStore.Delete(identity)
 	if err != nil {
-		return nil, ServerError, err
+		return n.errorMessage(ServerError, err.Error())
 	}
 
 	msg := &message.Dummy{
@@ -82,45 +81,40 @@ func (n *Newton) deleteServer(data map[string]interface{}) (interface{}, int, er
 		Status: Success,
 	}
 
-	return msg, Success, nil
+	return n.msgToByte(msg)
 }
 
 // Authenticates servers to communicate with each others
-func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) (interface{}, int, error) {
+func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Identity doesn't exist or invalid.")
+		return n.errorMessage(BadMessage, "Identity doesn't exist or invalid.")
 	}
 	n.Log.Info("Received authentication request from %s", identity)
-
 	password, ok := data["Password"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Password doesn't exist or invalid.")
+		return n.errorMessage(BadMessage, "Password doesn't exist or invalid.")
 	}
-
 	server, ok := n.ClusterStore.Get(identity)
 	if !ok {
-		return nil, Failed, errors.New("Identity could not be found.")
+		return n.errorMessage(Failed, "Identity could not be found.")
 	} else {
 		// We use identity as clientId for servers
 		clientId := identity
-		response, status, err := n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
-		if status == Success {
-			n.Log.Info("Opened a session for '%s'", identity)
-		}
-		return response, status, err
+		response, err := n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
+		return response, err
 	}
 }
 
 // Sets some basic variables and other things for internal communication between newton instances
-func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) (interface{}, int, error) {
+func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	// FIXME: Exception handling?
 	status, ok := data["Status"].(int)
 	if !ok {
-		return nil, BadMessage, errors.New("Broken authentication message.")
+		return n.errorMessage(BadMessage, "Broken authentication message.")
 	}
 	if status != Success {
-		return nil, AuthenticationFailed, errors.New("Authentication failed.")
+		return n.errorMessage(AuthenticationFailed, "Authentication failed.")
 	}
 
 	// TODO: Check existence
@@ -152,7 +146,7 @@ func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *n
 		Type:   "Dummy",
 		Status: Success,
 	}
-	return msg, Success, nil
+	return n.msgToByte(msg)
 }
 
 // Consume outgoing messages channel for internal connections

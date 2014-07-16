@@ -272,7 +272,7 @@ func (n *Newton) readConn(buff []byte, conn *net.Conn) bool {
 // Parse and dispatch incoming messages
 func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
-	var response interface{}
+	var response []byte
 	var err_ string
 	var status int
 	var t string = "Dummy"
@@ -323,40 +323,36 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		// Dispatch incoming messages and run related functions
 		switch {
 		case t == "AuthenticateUser":
-			response, status, err = n.authenticateUser(items, conn)
+			response, err = n.authenticateUser(items, conn)
 			// Close connection on error
 			closeConn = true
 		case t == "CreateUser":
-			response, status, err = n.createUser(items)
+			response, err = n.createUser(items)
 		case t == "CreateUserClient":
-			response, status, err = n.createUserClient(items)
+			response, err = n.createUserClient(items)
 		//case t == "CreateServer":
 		//	response, status, err = n.createServer(items)
 		case t == "DeleteServer":
-			response, status, err = n.deleteServer(items)
+			response, err = n.deleteServer(items)
 		case t == "AuthenticateServer":
-			response, status, err = n.authenticateServer(items, conn)
+			response, err = n.authenticateServer(items, conn)
 			// Close connection on error
 			closeConn = true
 		case t == "Authenticated":
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
-			response, status, err = n.startInternalCommunication(items, conn)
+			response, err = n.startInternalCommunication(items, conn)
 		case t == "Dummy":
 			// FIXME: This is not cool!
 			return
 		}
 
 		if err != nil {
+			n.Log.Error("SERVER ERROR: %s", err.Error())
+			err = errors.New("Internal Server Error.")
 			onerror(err)
 		} else {
-			response, err := json.Marshal(response)
-			if err != nil {
-				status = BadMessage
-				onerror(err)
-			} else {
-				(*conn).Write(response)
-			}
+			(*conn).Write(response)
 		}
 	}
 }

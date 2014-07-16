@@ -2,7 +2,7 @@ package newton
 
 import (
 	"bytes"
-	"errors"
+	"encoding/json"
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/message"
@@ -12,11 +12,11 @@ import (
 )
 
 // Check password and create and SessionSecret for authenticate the client
-func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte, conn *net.Conn) (interface{}, int, error) {
+func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte, conn *net.Conn) ([]byte, error) {
 	// Recreate the secret and compare
 	tmpSecret := murmur.HashString(salt + password)
 	if !bytes.Equal(secret, tmpSecret) {
-		return nil, AuthenticationFailed, errors.New("Authentication Failed")
+		return n.errorMessage(AuthenticationFailed, "Authentication Failed")
 	}
 
 	// Authentication is done after that time
@@ -35,15 +35,14 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		n.ConnTable.Lock()
 		delete(n.ConnTable.m, clientId)
 		n.ConnTable.Unlock()
-
-		return nil, Failed, errors.New("Client has an active connection.")
+		return n.errorMessage(Failed, "Client has an active connection.")
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	ss, err := uuid.NewV4()
 	if err != nil {
-		return nil, ServerError, err
+		return n.errorMessage(ServerError, err.Error())
 	}
 
 	now := time.Now().Unix()
@@ -76,5 +75,22 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		SessionSecret: ss.String(),
 	}
 
-	return msg, Success, nil
+	return n.msgToByte(msg)
+}
+
+func (n *Newton) errorMessage(status int, body string) ([]byte, error) {
+	msg := message.Dummy{
+		Type:   "Error",
+		Status: status,
+		Body:   body,
+	}
+	return n.msgToByte(msg)
+}
+
+func (n *Newton) msgToByte(msg interface{}) ([]byte, error) {
+	r, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }

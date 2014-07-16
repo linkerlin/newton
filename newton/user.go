@@ -1,54 +1,53 @@
 package newton
 
 import (
-	"errors"
 	"github.com/purak/newton/message"
 	"net"
 )
 
 // Authenticate and create a new client session for the client
-func (n *Newton) authenticateUser(data map[string]interface{}, conn *net.Conn) (interface{}, int, error) {
+func (n *Newton) authenticateUser(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("ClientId doesn't exist or invalid.")
+		return n.errorMessage(BadMessage, "ClientId doesn't exist or invalid.")
 	}
 
 	username, ok := data["Username"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Username doesn't exist or invalid.")
+		return n.errorMessage(BadMessage, "Username doesn't exist or invalid.")
 	}
 
 	password, ok := data["Password"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Password doesn't exist or invalid.")
+		return n.errorMessage(BadMessage, "Password doesn't exist or invalid.")
 	}
 
 	// Start authentication
 	user, ok := n.UserStore.Get(username)
 	if !ok {
-		return nil, Failed, errors.New("User could not be found.")
+		return n.errorMessage(BadMessage, "User could not be found.")
 	} else {
 		existed := n.UserStore.CheckUserClient(username, clientId)
 		if existed {
 			return n.authenticateConn(user.Salt, password, clientId, user.Secret, conn)
 		} else {
-			return nil, Failed, errors.New("ClientId could not be found.")
+			return n.errorMessage(BadMessage, "ClientId could not be found.")
 		}
 	}
 }
 
 // Creates a new user
-func (n *Newton) createUser(data map[string]interface{}) (interface{}, int, error) {
+func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Username is required.")
+		return n.errorMessage(BadMessage, "Username is required.")
 	}
 
 	// Check password
 	password, ok := data["Password"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Password is required.")
+		return n.errorMessage(BadMessage, "Password is required.")
 	}
 
 	_, existed := n.UserStore.Get(username)
@@ -57,12 +56,12 @@ func (n *Newton) createUser(data map[string]interface{}) (interface{}, int, erro
 		err := n.UserStore.Create(username, password)
 
 		if err != nil {
-			return nil, ServerError, err
+			return n.errorMessage(ServerError, err.Error())
 		}
 
 		clientId, err := n.UserStore.CreateUserClient(username)
 		if err != nil {
-			return nil, ServerError, err
+			return n.errorMessage(ServerError, err.Error())
 		}
 
 		msg := &message.ClientId{
@@ -70,29 +69,28 @@ func (n *Newton) createUser(data map[string]interface{}) (interface{}, int, erro
 			Status:   Success,
 			ClientId: clientId,
 		}
-
-		return msg, Success, nil
+		return n.msgToByte(msg)
 	} else {
-		return nil, Failed, errors.New("Already exist.")
+		return n.errorMessage(Failed, "Already Exist.")
 	}
 }
 
 // Creates a new client for the user
-func (n *Newton) createUserClient(data map[string]interface{}) (interface{}, int, error) {
+func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return nil, BadMessage, errors.New("Username is required.")
+		return n.errorMessage(BadMessage, "Username is required.")
 	}
 
 	clients := n.UserStore.GetUserClients(username)
 	if len(clients) >= n.Config.Database.MaxUserClient {
-		return nil, Failed, errors.New("MaxUserClient limit exceeded.")
+		return n.errorMessage(Failed, "MaxUserClient limit exceeded.")
 	}
 
 	clientId, err := n.UserStore.CreateUserClient(username)
 	if err != nil {
-		return nil, ServerError, err
+		return n.errorMessage(ServerError, err.Error())
 	}
 
 	msg := &message.ClientId{
@@ -100,6 +98,5 @@ func (n *Newton) createUserClient(data map[string]interface{}) (interface{}, int
 		Status:   Success,
 		ClientId: clientId,
 	}
-
-	return msg, Success, nil
+	return n.msgToByte(msg)
 }
