@@ -55,7 +55,7 @@ func (n *Newton) createServer() ([]byte, error) {
 		}
 
 		msg := &message.Dummy{
-			Type:   "Dummy",
+			Action: "Dummy",
 			Status: Success,
 		}
 
@@ -77,7 +77,7 @@ func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 	}
 
 	msg := &message.Dummy{
-		Type:   "Dummy",
+		Action: "Dummy",
 		Status: Success,
 	}
 
@@ -143,7 +143,7 @@ func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *n
 	// I'm alive
 	go n.heartbeat(value.Outgoing)
 	msg := &message.Dummy{
-		Type:   "Dummy",
+		Action: "Dummy",
 		Status: Success,
 	}
 	return n.msgToByte(msg)

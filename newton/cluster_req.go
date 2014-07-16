@@ -11,7 +11,7 @@ import (
 func (n *Newton) createServerReq(conn *net.Conn) {
 	// Dummy values for test
 	/*msg := &message.CreateServer{
-		Type:         "CreateServer",
+		Action:         "CreateServer",
 		Idendity:     "lpms",
 		Password:     "hadron",
 		InternalIp:   "127.0.0.1", // Inbound interface IP, for only rack-aware setups
@@ -24,7 +24,7 @@ func (n *Newton) createServerReq(conn *net.Conn) {
 func (n *Newton) deleteServerReq(identity string) (interface{}, int, error) {
 	// Dummy values for test
 	msg := &message.DeleteServer{
-		Type:     "DeleteServer",
+		Action:   "DeleteServer",
 		Identity: identity,
 	}
 
@@ -34,7 +34,7 @@ func (n *Newton) deleteServerReq(identity string) (interface{}, int, error) {
 // Sends a message for authentication
 func (n *Newton) authenticateServerReq(identity, password string, conn *net.Conn) {
 	msg := &message.AuthenticateServer{
-		Type:     "AuthenticateServer",
+		Action:   "AuthenticateServer",
 		Identity: identity,
 		Password: password,
 	}

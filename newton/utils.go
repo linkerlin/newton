@@ -70,7 +70,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 	n.ConnClientTable.Unlock()
 
 	msg := &message.Authenticated{
-		Type:          "Authenticated",
+		Action:        "Authenticated",
 		Status:        Success,
 		SessionSecret: ss.String(),
 	}
@@ -80,7 +80,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 
 func (n *Newton) errorMessage(status int, body string) ([]byte, error) {
 	msg := message.Dummy{
-		Type:   "Error",
+		Action: "Error",
 		Status: status,
 		Body:   body,
 	}

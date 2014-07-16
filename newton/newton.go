@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
-	"errors"
 	"github.com/purak/newton/cluster"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
 	"github.com/purak/newton/user"
 	"net"
@@ -248,7 +246,7 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 				// This is an authenticated client, update last activity data.
 				clientItem.LastAnnounce = now
 			}
-			// If the message type is CreateSession, the connection record
+			// If the message Action is CreateSession, the connection record
 			// will be created.
 			go n.dispatchMessages(buff, conn)
 		}
@@ -272,36 +270,28 @@ func (n *Newton) readConn(buff []byte, conn *net.Conn) bool {
 // Parse and dispatch incoming messages
 func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
+	var closeConn bool = false
 	var response []byte
-	var err_ string
-	var status int
 	var t string = "Dummy"
 	var ok bool
-	closeConn := false
 
 	// Sends error message
-	onerror := func(err error) {
-		err_ = err.Error()
-		errMsg := &message.Dummy{
-			Type:   t,
-			Status: status,
-			Body:   err_,
-		}
-		b, _ := json.Marshal(errMsg)
+	onerror := func(status int, err string) {
 		// FIXME: Handle serialization errors
-		// Return the error message
-		(*conn).Write(b)
+		m, e := n.errorMessage(status, err)
+		if e != nil {
+			n.Log.Error("Internal Server Error: %s", e.Error())
+		}
+		(*conn).Write(m)
 		if closeConn {
 			(*conn).Close()
 		}
 	}
 
-	failedExp := errors.New("Unknown or broken message.")
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
-		status = BadMessage
 		closeConn = true
-		onerror(failedExp)
+		onerror(BadMessage, "Broken message.")
 	} else if request != nil {
 		items := request.(map[string]interface{})
 		// We need int but encoding/json returns float64 for numbers
@@ -311,15 +301,14 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		if ok {
 			items["Status"] = int(s)
 		}
-		// Check type
-		t, ok = items["Type"].(string)
+		// Check Action
+		t, ok = items["Action"].(string)
 		if !ok {
 			closeConn = true
-			onerror(failedExp)
+			onerror(BadMessage, "Action is missing.")
 		}
 
 		// TODO: We need a better message and error handling mech.
-
 		// Dispatch incoming messages and run related functions
 		switch {
 		case t == "AuthenticateUser":
@@ -330,8 +319,6 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			response, err = n.createUser(items)
 		case t == "CreateUserClient":
 			response, err = n.createUserClient(items)
-		//case t == "CreateServer":
-		//	response, status, err = n.createServer(items)
 		case t == "DeleteServer":
 			response, err = n.deleteServer(items)
 		case t == "AuthenticateServer":
@@ -342,15 +329,14 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
 			response, err = n.startInternalCommunication(items, conn)
-		case t == "Dummy":
+		case t == "Success":
 			// FIXME: This is not cool!
 			return
 		}
 
 		if err != nil {
 			n.Log.Error("SERVER ERROR: %s", err.Error())
-			err = errors.New("Internal Server Error.")
-			onerror(err)
+			onerror(ServerError, "Internal Server Error")
 		} else {
 			(*conn).Write(response)
 		}

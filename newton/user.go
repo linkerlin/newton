@@ -65,7 +65,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		}
 
 		msg := &message.ClientId{
-			Type:     "ClientId",
+			Action:   "ClientId",
 			Status:   Success,
 			ClientId: clientId,
 		}
@@ -94,7 +94,7 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	}
 
 	msg := &message.ClientId{
-		Type:     "ClientId",
+		Action:   "ClientId",
 		Status:   Success,
 		ClientId: clientId,
 	}

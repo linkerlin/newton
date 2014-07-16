@@ -64,7 +64,7 @@ func (u *UserStore) Create(username, password string) error {
 	// Serialize the user
 	bytes := common.MustJSONEncode(user)
 	// Put it in the database
-	// TODO: this function must have a return type
+	// TODO: this function must have a return Action
 	u.Conn.Put(murmur.HashString(username), bytes)
 
 	return nil
@@ -115,7 +115,7 @@ func (u *UserStore) GetUserClients(username string) []common.Item {
 	return items
 }
 
-// TODO: this function must have a return type
+// TODO: this function must have a return Action
 // Gets UserClient items for the given key
 func (u *UserStore) DeleteUserClient(username string, clientId []byte) {
 	key := murmur.HashString(username)

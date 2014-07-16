@@ -75,7 +75,7 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 	// Serialize the server item
 	bytes := common.MustJSONEncode(server)
 	// Put it in the database
-	// TODO: this function must have a return type
+	// TODO: this function must have a return Action
 	c.Conn.Put(murmur.HashString(identity), bytes)
 
 	return nil
