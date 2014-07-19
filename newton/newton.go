@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
-	"github.com/purak/newton/cluster"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/store"
-	"github.com/purak/newton/user"
 	"net"
 	"sync"
 	"time"
@@ -39,8 +37,8 @@ type Newton struct {
 	ClientQueue       chan *store.Item
 	ConnTable         *ConnTable
 	ConnClientTable   *ConnClientTable
-	UserStore         *user.UserStore
-	ClusterStore      *cluster.ClusterStore
+	UserStore         *store.UserStore
+	ClusterStore      *store.ClusterStore
 	InternalConnTable *InternalConnTable
 }
 
@@ -98,10 +96,10 @@ func New(c *config.Config) *Newton {
 	cq := make(chan *store.Item, 1000)
 
 	// For reaching users on the cluster
-	us := user.New(c)
+	us := store.NewUserStore(c)
 
 	// For talking to other newton servers
-	cl := cluster.New(c)
+	cl := store.NewClusterStore(c)
 	ict := &InternalConnTable{i: make(map[string]*ServerItem)}
 
 	return &Newton{

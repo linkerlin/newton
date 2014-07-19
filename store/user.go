@@ -1,4 +1,4 @@
-package user
+package store
 
 import (
 	"github.com/nu7hatch/gouuid"
@@ -23,7 +23,7 @@ type User struct {
 }
 
 // Creates a new socket for reaching User items
-func New(c *config.Config) *UserStore {
+func NewUserStore(c *config.Config) *UserStore {
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()

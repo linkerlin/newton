@@ -1,4 +1,4 @@
-package cluster
+package store
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ type Server struct {
 }
 
 // Creates a new socket for reaching cluster members
-func New(c *config.Config) *ClusterStore {
+func NewClusterStore(c *config.Config) *ClusterStore {
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()
