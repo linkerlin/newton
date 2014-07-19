@@ -24,6 +24,15 @@ type User struct {
 
 // Creates a new socket for reaching User items
 func NewUserStore(c *config.Config) *UserStore {
+	// Create a new logger
+	l, setlevel := cstream.NewLogger("UserStore")
+
+	defer func() {
+		if r := recover(); r != nil {
+			l.Fatal("%s", r)
+		}
+	}()
+
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()
@@ -31,9 +40,6 @@ func NewUserStore(c *config.Config) *UserStore {
 
 	// New database connection
 	conn := gconn.MustConn(c.Database.Addr)
-
-	// Create a new logger
-	l, setlevel := cstream.NewLogger("newton")
 
 	return &UserStore{
 		Conn:        conn,

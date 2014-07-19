@@ -31,6 +31,15 @@ type Server struct {
 
 // Creates a new socket for reaching cluster members
 func NewClusterStore(c *config.Config) *ClusterStore {
+	// Create a new logger
+	l, setlevel := cstream.NewLogger("ClusterStore")
+
+	defer func() {
+		if r := recover(); r != nil {
+			l.Fatal("%s", r)
+		}
+	}()
+
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()
@@ -38,9 +47,6 @@ func NewClusterStore(c *config.Config) *ClusterStore {
 
 	// New database connection
 	conn := gconn.MustConn(c.Database.Addr)
-
-	// Create a new logger
-	l, setlevel := cstream.NewLogger("newton")
 
 	return &ClusterStore{
 		Conn:        conn,
