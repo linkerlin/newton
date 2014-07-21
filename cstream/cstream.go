@@ -28,3 +28,16 @@ func ParseIP(rawIP string) (string, error) {
 		return ip, nil
 	}
 }
+
+// Operation Codes are defined here
+
+// 2xx => Success codes
+// 1xx => Error codes
+const (
+	Success                = 200 // Generic success code
+	Failed                 = 100 // Generic fail code
+	AuthenticationFailed   = 101
+	AuthenticationRequired = 102
+	ServerError            = 103
+	BadMessage             = 104 // Broken message
+)

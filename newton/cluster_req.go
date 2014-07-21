@@ -21,14 +21,14 @@ func (n *Newton) createServerReq(conn *net.Conn) {
 }
 
 // Sends a message to delete the server from cluster
-func (n *Newton) deleteServerReq(identity string) (interface{}, int, error) {
+func (n *Newton) deleteServerReq(identity string) (interface{}, error) {
 	// Dummy values for test
 	msg := &message.DeleteServer{
-		Action:   "DeleteServer",
+		Action:   cstream.DeleteServer,
 		Identity: identity,
 	}
 
-	return msg, Success, nil
+	return msg, nil
 }
 
 // Sends a message for authentication

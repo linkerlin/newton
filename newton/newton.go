@@ -14,20 +14,6 @@ import (
 
 const ReleaseVersion = "0.0.1"
 
-// Operation Codes are defined here
-
-// 2xx => Success codes
-// 1xx => Error codes
-const (
-	Success                = 200 // Generic success code
-	Failed                 = 100 // Generic fail code
-	AuthenticationFailed   = 101
-	AuthenticationRequired = 102
-	ServerError            = 103
-	BadMessage             = 104 // Broken message
-
-)
-
 // Newton instance struct
 type Newton struct {
 	Config            *config.Config
@@ -100,6 +86,7 @@ func New(c *config.Config) *Newton {
 
 	// For talking to other newton servers
 	cl := store.NewClusterStore(c)
+
 	ict := &InternalConnTable{i: make(map[string]*ServerItem)}
 
 	return &Newton{
@@ -270,13 +257,13 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
 	var closeConn bool = false
 	var response []byte
-	var t string = "Dummy"
+	var t string
 	var ok bool
 
 	// Sends error message
 	onerror := func(status int, err string) {
 		// FIXME: Handle serialization errors
-		m, e := n.errorMessage(status, err)
+		m, e := n.returnError(status, err)
 		if e != nil {
 			n.Log.Error("Internal Server Error: %s", e.Error())
 		}
@@ -327,7 +314,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
 			response, err = n.startInternalCommunication(items, conn)
-		case t == "Success":
+		case t == "Error":
 			// FIXME: This is not cool!
 			return
 		}

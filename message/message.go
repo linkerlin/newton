@@ -3,22 +3,24 @@ package message
 // Defines a message for SessionSecret
 type Authenticated struct {
 	Action        string
-	Status        int
 	SessionSecret string
 }
 
 // Defines a message for ClientId
 type ClientId struct {
 	Action   string
-	Status   int
 	ClientId string
 }
 
-// Defines dummy message with any kind of status
-type Dummy struct {
+// Defines an error message
+type Error struct {
 	Action string
-	Status int
 	Body   string
+}
+
+// Defines a success message
+type Success struct {
+	Action string
 }
 
 // Defines an authentication request message between newton servers
