@@ -1,6 +1,7 @@
 package newton
 
 import (
+	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"net"
 )
@@ -9,29 +10,29 @@ import (
 func (n *Newton) authenticateUser(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "ClientId doesn't exist or invalid.")
+		return n.returnError(cstream.BadMessage, "ClientId doesn't exist or invalid.")
 	}
 
 	username, ok := data["Username"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "Username doesn't exist or invalid.")
+		return n.returnError(cstream.BadMessage, "Username doesn't exist or invalid.")
 	}
 
 	password, ok := data["Password"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "Password doesn't exist or invalid.")
+		return n.returnError(cstream.BadMessage, "Password doesn't exist or invalid.")
 	}
 
 	// Start authentication
 	user, ok := n.UserStore.Get(username)
 	if !ok {
-		return n.returnError(BadMessage, "User could not be found.")
+		return n.returnError(cstream.BadMessage, "User could not be found.")
 	} else {
 		existed := n.UserStore.CheckUserClient(username, clientId)
 		if existed {
 			return n.authenticateConn(user.Salt, password, clientId, user.Secret, conn)
 		} else {
-			return n.returnError(BadMessage, "ClientId could not be found.")
+			return n.returnError(cstream.BadMessage, "ClientId could not be found.")
 		}
 	}
 }
@@ -41,13 +42,13 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "Username is required.")
+		return n.returnError(cstream.BadMessage, "Username is required.")
 	}
 
 	// Check password
 	password, ok := data["Password"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "Password is required.")
+		return n.returnError(cstream.BadMessage, "Password is required.")
 	}
 
 	_, existed := n.UserStore.Get(username)
@@ -56,22 +57,21 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		err := n.UserStore.Create(username, password)
 
 		if err != nil {
-			return n.returnError(ServerError, err.Error())
+			return n.returnError(cstream.ServerError, err.Error())
 		}
 
 		clientId, err := n.UserStore.CreateUserClient(username)
 		if err != nil {
-			return n.returnError(ServerError, err.Error())
+			return n.returnError(cstream.ServerError, err.Error())
 		}
 
 		msg := &message.ClientId{
-			Action:   "ClientId",
-			Status:   Success,
+			Action:   cstream.GetClientId,
 			ClientId: clientId,
 		}
 		return n.msgToByte(msg)
 	} else {
-		return n.returnError(Failed, "Already Exist.")
+		return n.returnError(cstream.Failed, "Already Exist.")
 	}
 }
 
@@ -80,21 +80,21 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	// Check username
 	username, ok := data["Username"].(string)
 	if !ok {
-		return n.returnError(BadMessage, "Username is required.")
+		return n.returnError(cstream.BadMessage, "Username is required.")
 	}
 
 	clients := n.UserStore.GetUserClients(username)
 	if len(clients) >= n.Config.Database.MaxUserClient {
-		return n.returnError(Failed, "MaxUserClient limit exceeded.")
+		return n.returnError(cstream.Failed, "MaxUserClient limit exceeded.")
 	}
 
 	clientId, err := n.UserStore.CreateUserClient(username)
 	if err != nil {
-		return n.returnError(ServerError, err.Error())
+		return n.returnError(cstream.ServerError, err.Error())
 	}
 
 	msg := &message.ClientId{
-		Action:   n.Actions.ClientId,
+		Action:   cstream.GetClientId,
 		ClientId: clientId,
 	}
 	return n.msgToByte(msg)

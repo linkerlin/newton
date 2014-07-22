@@ -257,7 +257,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
 	var closeConn bool = false
 	var response []byte
-	var t string
+	var action int
 	var ok bool
 
 	// Sends error message
@@ -276,52 +276,49 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
 		closeConn = true
-		onerror(BadMessage, "Broken message.")
+		onerror(cstream.BadMessage, "Broken message.")
 	} else if request != nil {
 		items := request.(map[string]interface{})
+		// Check Action
 		// We need int but encoding/json returns float64 for numbers
 		// This is a pretty bad hack but it works :|
 		var s float64
-		s, ok = items["Status"].(float64)
-		if ok {
-			items["Status"] = int(s)
-		}
-		// Check Action
-		t, ok = items["Action"].(string)
+		s, ok = items["Action"].(float64)
 		if !ok {
 			closeConn = true
-			onerror(BadMessage, "Action is missing.")
+			onerror(cstream.BadMessage, "Action is missing.")
 		}
+		action = int(s)
 
 		// TODO: We need a better message and error handling mech.
 		// Dispatch incoming messages and run related functions
 		switch {
-		case t == "AuthenticateUser":
+		case action == cstream.AuthenticateUser:
 			response, err = n.authenticateUser(items, conn)
 			// Close connection on error
 			closeConn = true
-		case t == "CreateUser":
+		case action == cstream.CreateUser:
 			response, err = n.createUser(items)
-		case t == "CreateUserClient":
+		case action == cstream.CreateUserClient:
 			response, err = n.createUserClient(items)
-		case t == "DeleteServer":
+		case action == cstream.DeleteServer:
 			response, err = n.deleteServer(items)
-		case t == "AuthenticateServer":
+		case action == cstream.AuthenticateServer:
 			response, err = n.authenticateServer(items, conn)
 			// Close connection on error
 			closeConn = true
-		case t == "Authenticated":
+		case action == cstream.Authenticated:
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
 			response, err = n.startInternalCommunication(items, conn)
-		case t == "Error":
+		case action == cstream.Failed:
 			// FIXME: This is not cool!
 			return
 		}
 
 		if err != nil {
 			n.Log.Error("SERVER ERROR: %s", err.Error())
-			onerror(ServerError, "Internal Server Error")
+			onerror(cstream.ServerError, "Internal Server Error")
 		} else {
 			(*conn).Write(response)
 		}

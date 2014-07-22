@@ -1,6 +1,7 @@
 package newton
 
 import (
+	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"net"
 )
@@ -34,7 +35,7 @@ func (n *Newton) deleteServerReq(identity string) (interface{}, error) {
 // Sends a message for authentication
 func (n *Newton) authenticateServerReq(identity, password string, conn *net.Conn) {
 	msg := &message.AuthenticateServer{
-		Action:   "AuthenticateServer",
+		Action:   cstream.AuthenticateServer,
 		Identity: identity,
 		Password: password,
 	}

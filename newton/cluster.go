@@ -2,7 +2,6 @@ package newton
 
 import (
 	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/message"
 	"net"
 	"time"
 )
@@ -101,11 +100,11 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 // Sets some basic variables and other things for internal communication between newton instances
 func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	// FIXME: Exception handling?
-	status, ok := data["Status"].(int)
+	action, ok := data["Action"].(int)
 	if !ok {
 		return n.returnError(cstream.BadMessage, "Broken authentication message.")
 	}
-	if status != Success {
+	if action != cstream.Success {
 		return n.returnError(cstream.AuthenticationFailed, "Authentication failed.")
 	}
 

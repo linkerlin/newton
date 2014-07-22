@@ -2,37 +2,37 @@ package message
 
 // Defines a message for SessionSecret
 type Authenticated struct {
-	Action        string
+	Action        int
 	SessionSecret string
 }
 
 // Defines a message for ClientId
 type ClientId struct {
-	Action   string
+	Action   int
 	ClientId string
 }
 
 // Defines an error message
 type Error struct {
-	Action string
+	Action int
 	Body   string
 }
 
 // Defines a success message
 type Success struct {
-	Action string
+	Action int
 }
 
 // Defines an authentication request message between newton servers
 type AuthenticateServer struct {
-	Action   string
+	Action   int
 	Identity string
 	Password string
 }
 
 // Defines a membership message for newton servers
 type CreateServer struct {
-	Action       string
+	Action       int
 	Idendity     string
 	Password     string
 	WanIp        string // Outbound interface IP
@@ -43,6 +43,6 @@ type CreateServer struct {
 
 // Defines a message for deleting a server
 type DeleteServer struct {
-	Action   string
+	Action   int
 	Identity string
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/murmur"
+	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
 	"net"
@@ -16,7 +17,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 	// Recreate the secret and compare
 	tmpSecret := murmur.HashString(salt + password)
 	if !bytes.Equal(secret, tmpSecret) {
-		return n.returnError(AuthenticationFailed, "Authentication Failed")
+		return n.returnError(cstream.AuthenticationFailed, "Authentication Failed")
 	}
 
 	// Authentication is done after that time
@@ -35,14 +36,14 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		n.ConnTable.Lock()
 		delete(n.ConnTable.m, clientId)
 		n.ConnTable.Unlock()
-		return n.returnError(Failed, "Client has an active connection.")
+		return n.returnError(cstream.Failed, "Client has an active connection.")
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	ss, err := uuid.NewV4()
 	if err != nil {
-		return n.returnError(ServerError, err.Error())
+		return n.returnError(cstream.ServerError, err.Error())
 	}
 
 	now := time.Now().Unix()
@@ -70,8 +71,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 	n.ConnClientTable.Unlock()
 
 	msg := &message.Authenticated{
-		Action:        "Authenticated",
-		Status:        Success,
+		Action:        cstream.Authenticated,
 		SessionSecret: ss.String(),
 	}
 
@@ -79,7 +79,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 }
 
 // TODO: Rename this
-func (n *Newton) returnError(action, body string) ([]byte, error) {
+func (n *Newton) returnError(action int, body string) ([]byte, error) {
 	msg := message.Error{
 		Action: action,
 		Body:   body,
@@ -88,10 +88,9 @@ func (n *Newton) returnError(action, body string) ([]byte, error) {
 }
 
 // Returns a pre-defined return message
-func (n *Newton) returnSuccess() {
+func (n *Newton) returnSuccess() ([]byte, error) {
 	msg := message.Success{
-		Action: "Success",
-		Code:   Success,
+		Action: cstream.Success,
 	}
 	return n.msgToByte(msg)
 }
