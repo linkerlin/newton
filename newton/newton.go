@@ -86,7 +86,6 @@ func New(c *config.Config) *Newton {
 
 	// For talking to other newton servers
 	cl := store.NewClusterStore(c)
-
 	ict := &InternalConnTable{i: make(map[string]*ServerItem)}
 
 	return &Newton{
@@ -255,15 +254,15 @@ func (n *Newton) readConn(buff []byte, conn *net.Conn) bool {
 // Parse and dispatch incoming messages
 func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
-	var closeConn bool = false
+	var ok, closeConn bool = false, false
+	var returnResponse bool = true
 	var response []byte
 	var action int
-	var ok bool
 
-	// Sends error message
-	onerror := func(status int, err string) {
+	// Send an error message
+	onerror := func(status, code int) {
 		// FIXME: Handle serialization errors
-		m, e := n.returnError(status, err)
+		m, e := n.returnError(status, code)
 		if e != nil {
 			n.Log.Error("Internal Server Error: %s", e.Error())
 		}
@@ -276,7 +275,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
 		closeConn = true
-		onerror(cstream.BadMessage, "Broken message.")
+		onerror(cstream.BadMessage, 0)
 	} else if request != nil {
 		items := request.(map[string]interface{})
 		// Check Action
@@ -286,7 +285,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		s, ok = items["Action"].(float64)
 		if !ok {
 			closeConn = true
-			onerror(cstream.BadMessage, "Action is missing.")
+			onerror(cstream.BadMessage, cstream.ActionRequired)
 		}
 		action = int(s)
 
@@ -311,16 +310,15 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
 			response, err = n.startInternalCommunication(items, conn)
-		case action == cstream.Failed:
-			// FIXME: This is not cool!
-			return
 		}
 
-		if err != nil {
-			n.Log.Error("SERVER ERROR: %s", err.Error())
-			onerror(cstream.ServerError, "Internal Server Error")
-		} else {
-			(*conn).Write(response)
+		if returnResponse {
+			if err != nil {
+				n.Log.Error("SERVER ERROR: %s", err.Error())
+				onerror(action, cstream.ServerError)
+			} else {
+				(*conn).Write(response)
+			}
 		}
 	}
 }

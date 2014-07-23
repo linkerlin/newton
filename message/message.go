@@ -15,7 +15,7 @@ type ClientId struct {
 // Defines an error message
 type Error struct {
 	Action int
-	Body   string
+	Code   int
 }
 
 // Defines a success message

@@ -51,12 +51,13 @@ func (n *Newton) createServer() ([]byte, error) {
 		err := n.ClusterStore.Create(identity, password, wanIp, wanPort, internalIp, internalPort)
 
 		if err != nil {
-			return n.returnError(cstream.ServerError, err.Error())
+			n.Log.Error(err.Error())
+			return n.returnError(cstream.CreateServerFailed, cstream.ServerError)
 		}
-
-		return n.returnSuccess()
+		// Authenticate server in the same time
+		return nil, nil
 	} else {
-		return n.returnError(cstream.Failed, "Already exist.")
+		return n.returnError(cstream.CreateServerFailed, cstream.AlredyExist)
 	}
 }
 
@@ -64,31 +65,32 @@ func (n *Newton) createServer() ([]byte, error) {
 func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
-		return n.returnError(cstream.BadMessage, "Identity required.")
+		return n.returnError(cstream.DeleteServerFailed, cstream.IdentityRequired)
 	}
 	err := n.ClusterStore.Delete(identity)
 	if err != nil {
-		return n.returnError(cstream.ServerError, err.Error())
+		n.Log.Error(err.Error())
+		return n.returnError(cstream.DeleteServerFailed, cstream.ServerError)
 	}
-	return n.returnSuccess()
+	return nil, nil
 }
 
 // Authenticates servers to communicate with each others
 func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
-		return n.returnError(cstream.BadMessage, "Identity doesn't exist or invalid.")
+		return n.returnError(cstream.AuthenticationFailed, cstream.IdentityRequired)
 	}
 
 	n.Log.Info("Received authentication request from %s", identity)
 	password, ok := data["Password"].(string)
 	if !ok {
-		return n.returnError(cstream.BadMessage, "Password doesn't exist or invalid.")
+		return n.returnError(cstream.AuthenticationFailed, cstream.PasswordRequired)
 	}
 
 	server, ok := n.ClusterStore.Get(identity)
 	if !ok {
-		return n.returnError(cstream.Failed, "Identity could not be found.")
+		return n.returnError(cstream.AuthenticationFailed, cstream.IdentityNotFound)
 	} else {
 		// We use identity as clientId for servers
 		clientId := identity
@@ -99,15 +101,6 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 
 // Sets some basic variables and other things for internal communication between newton instances
 func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
-	// FIXME: Exception handling?
-	action, ok := data["Action"].(int)
-	if !ok {
-		return n.returnError(cstream.BadMessage, "Broken authentication message.")
-	}
-	if action != cstream.Success {
-		return n.returnError(cstream.AuthenticationFailed, "Authentication failed.")
-	}
-
 	// TODO: Check existence
 	secret, _ := data["SessionSecret"].(string)
 	var identity string
@@ -133,7 +126,7 @@ func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *n
 	go n.consumeOutgoingChannel(value.Outgoing, conn)
 	// I'm alive
 	go n.heartbeat(value.Outgoing)
-	return n.returnSuccess()
+	return nil, nil
 }
 
 // Consume outgoing messages channel for internal connections

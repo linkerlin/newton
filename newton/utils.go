@@ -17,7 +17,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 	// Recreate the secret and compare
 	tmpSecret := murmur.HashString(salt + password)
 	if !bytes.Equal(secret, tmpSecret) {
-		return n.returnError(cstream.AuthenticationFailed, "Authentication Failed")
+		return n.returnError(cstream.AuthenticationFailed)
 	}
 
 	// Authentication is done after that time
@@ -36,14 +36,15 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		n.ConnTable.Lock()
 		delete(n.ConnTable.m, clientId)
 		n.ConnTable.Unlock()
-		return n.returnError(cstream.Failed, "Client has an active connection.")
+		return n.returnError(cstream.AuthenticationFailed, cstream.HasAnotherConnection)
 	}
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
 	ss, err := uuid.NewV4()
 	if err != nil {
-		return n.returnError(cstream.ServerError, err.Error())
+		n.Log.Error(err.Error())
+		return n.returnError(cstream.AuthenticationFailed, cstream.ServerError)
 	}
 
 	now := time.Now().Unix()
@@ -79,18 +80,14 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 }
 
 // TODO: Rename this
-func (n *Newton) returnError(action int, body string) ([]byte, error) {
-	msg := message.Error{
-		Action: action,
-		Body:   body,
+func (n *Newton) returnError(args ...int) ([]byte, error) {
+	code := 0
+	if len(args) == 2 {
+		code = args[1]
 	}
-	return n.msgToByte(msg)
-}
-
-// Returns a pre-defined return message
-func (n *Newton) returnSuccess() ([]byte, error) {
-	msg := message.Success{
-		Action: cstream.Success,
+	msg := message.Error{
+		Action: args[0],
+		Code:   code,
 	}
 	return n.msgToByte(msg)
 }

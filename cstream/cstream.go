@@ -29,25 +29,49 @@ func ParseIP(rawIP string) (string, error) {
 	}
 }
 
-// Operation Codes are defined here
+// Action codes are defined here
 
-// 2xx => Success codes
-// 1xx => Error codes
+// Success codes
 const (
-	Failed                 = 100 // Generic fail code
-	AuthenticationFailed   = 101
-	AuthenticationRequired = 102
-	ServerError            = 103
-	BadMessage             = 104 // Broken message
+	Authenticated int = 100 + iota
+	AuthenticateUser
+	AuthenticateServer
+	CreateServer
+	DeleteServer
+	CreateUser
+	CreateUserClient
+	GetClientId // Rename this
+	PostMessage
+	PostMessageSuccess
+	DeleteMessage
+	DeleteMessageSuccess
 )
 
+// Fail codes
 const (
-	Success            = 200 // Generic success code
-	Authenticated      = 201
-	AuthenticateUser   = 202
-	AuthenticateServer = 203
-	DeleteServer       = 204
-	CreateUser         = 205
-	CreateUserClient   = 206
-	GetClientId        = 207
+	AuthenticationFailed int = 200 + iota
+	AuthenticationRequired
+	CreateServerFailed
+	DeleteServerFailed
+	CreateUserFailed
+	CreateUserClientFailed
+	PostMessageFailed
+	DeleteMessageFailed
+	BadMessage
+)
+
+// More spesific fail codes
+const (
+	ServerError int = 300 + iota
+	IdentityRequired
+	UsernameRequired
+	PasswordRequired
+	ActionRequired
+	IdentityNotFound
+	UsernameNotFound
+	ClientIdNotFound
+	HasAnotherConnection
+	MaxClientCountExceeded
+	AlredyExist
+	ClientIdRequired
 )
