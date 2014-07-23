@@ -7,11 +7,11 @@ import (
 )
 
 // Functions to manipulate and manage ClusterStore data.
-
+/*
 // Creates a new server item on the cluster
 func (n *Newton) createServer() ([]byte, error) {
 	// Sending the identity and password is a necessity.
-	/*identity, ok := data["Identity"].(string)
+	identity, ok := data["Identity"].(string)
 	if !ok {
 		return nil, BadMessage, errors.New("Identity is required.")
 	}
@@ -34,7 +34,7 @@ func (n *Newton) createServer() ([]byte, error) {
 		if internalIp == "" || internalPort == "" {
 			return nil, BadMessage, errors.New("Missing IP or port data.")
 		}
-	}*/
+	}
 
 	// Fake parameters
 	identity := "lpms"
@@ -73,7 +73,7 @@ func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 		return n.returnError(cstream.DeleteServerFailed, cstream.ServerError)
 	}
 	return nil, nil
-}
+} */
 
 // Authenticates servers to communicate with each others
 func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
@@ -100,7 +100,7 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 }
 
 // Sets some basic variables and other things for internal communication between newton instances
-func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
+func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) {
 	// TODO: Check existence
 	secret, _ := data["SessionSecret"].(string)
 	var identity string
@@ -126,7 +126,6 @@ func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *n
 	go n.consumeOutgoingChannel(value.Outgoing, conn)
 	// I'm alive
 	go n.heartbeat(value.Outgoing)
-	return nil, nil
 }
 
 // Consume outgoing messages channel for internal connections

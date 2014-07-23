@@ -300,8 +300,6 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 			response, err = n.createUser(items)
 		case action == cstream.CreateUserClient:
 			response, err = n.createUserClient(items)
-		case action == cstream.DeleteServer:
-			response, err = n.deleteServer(items)
 		case action == cstream.AuthenticateServer:
 			response, err = n.authenticateServer(items, conn)
 			// Close connection on error
@@ -309,7 +307,8 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		case action == cstream.Authenticated:
 			// TODO: Think about potential security vulnerables
 			// This is an internal connection between newton instances
-			response, err = n.startInternalCommunication(items, conn)
+			n.startInternalCommunication(items, conn)
+			returnResponse = false
 		}
 
 		if returnResponse {
