@@ -2,9 +2,10 @@ package config
 
 import (
 	"flag"
-	"github.com/BurntSushi/toml"
 	"io/ioutil"
 	"os"
+
+	"github.com/BurntSushi/toml"
 )
 
 // FIXME: 32 bit compabilty is a problem for configuration items

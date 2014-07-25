@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"

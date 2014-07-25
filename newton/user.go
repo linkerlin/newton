@@ -1,9 +1,10 @@
 package newton
 
 import (
+	"net"
+
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
-	"net"
 )
 
 // Authenticate and create a new client session for the client
@@ -68,7 +69,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		}
 
 		msg := &message.ClientId{
-			Action:   cstream.GetClientId,
+			Action:   cstream.SetClientId,
 			ClientId: clientId,
 		}
 		return n.msgToByte(msg)
@@ -97,7 +98,7 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	}
 
 	msg := &message.ClientId{
-		Action:   cstream.GetClientId,
+		Action:   cstream.SetClientId,
 		ClientId: clientId,
 	}
 	return n.msgToByte(msg)

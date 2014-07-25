@@ -3,13 +3,14 @@ package newton
 import (
 	"bytes"
 	"encoding/json"
+	"net"
+	"time"
+
 	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
-	"net"
-	"time"
 )
 
 // Check password and create and SessionSecret for authenticate the client

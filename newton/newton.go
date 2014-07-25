@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
-	"github.com/purak/newton/config"
-	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/store"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/purak/newton/config"
+	"github.com/purak/newton/cstream"
+	"github.com/purak/newton/store"
 )
 
 const ReleaseVersion = "0.0.1"

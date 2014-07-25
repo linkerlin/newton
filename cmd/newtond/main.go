@@ -2,20 +2,21 @@ package main
 
 import (
 	"fmt"
-	"github.com/purak/newton/config"
-	"github.com/purak/newton/newton"
 	"os"
 	"strings"
+
+	"github.com/purak/newton/config"
+	"github.com/purak/newton/newton"
 )
 
 var version = "0.0.1"
 var usage = `
-newton -- distributed message relaying server
+newtond -- distributed message relaying and static file server
 
 Usage:
-  newton -addr <addr>
-  newton -h | -help
-  newton -version
+  newtond -addr <addr>
+  newtond -h | -help
+  newtond -version
 
 Options:
   -h -help          Show this screen.

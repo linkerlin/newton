@@ -1,9 +1,10 @@
 package newton
 
 import (
+	"net"
+
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
-	"net"
 )
 
 // Functions to manipulate ClusterStore data on a remote server

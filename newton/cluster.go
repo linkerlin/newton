@@ -1,9 +1,10 @@
 package newton
 
 import (
-	"github.com/purak/newton/cstream"
 	"net"
 	"time"
+
+	"github.com/purak/newton/cstream"
 )
 
 // Functions to manipulate and manage ClusterStore data.
