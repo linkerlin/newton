@@ -8,7 +8,7 @@ import (
 )
 
 // Authenticate and create a new client session for the client
-func (n *Newton) authenticateUser(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
+func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
 	clientId, ok := data["ClientId"].(string)
 	if !ok {
 		return n.returnError(cstream.AuthenticationFailed, cstream.ClientIdRequired)
@@ -31,6 +31,7 @@ func (n *Newton) authenticateUser(data map[string]interface{}, conn *net.Conn) (
 	} else {
 		existed := n.UserStore.CheckUserClient(username, clientId)
 		if existed {
+			conn := data["Conn"].(*net.Conn)
 			return n.authenticateConn(user.Salt, password, clientId, user.Secret, conn)
 		} else {
 			return n.returnError(cstream.AuthenticationFailed, cstream.ClientIdNotFound)

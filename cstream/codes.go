@@ -47,4 +47,5 @@ const (
 	MaxClientCountExceeded
 	AlredyExist
 	ClientIdRequired
+	UnknownAction
 )

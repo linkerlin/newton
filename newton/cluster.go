@@ -77,7 +77,7 @@ func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 } */
 
 // Authenticates servers to communicate with each others
-func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn) ([]byte, error) {
+func (n *Newton) authenticateServer(data map[string]interface{}) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
 	if !ok {
 		return n.returnError(cstream.AuthenticationFailed, cstream.IdentityRequired)
@@ -95,17 +95,19 @@ func (n *Newton) authenticateServer(data map[string]interface{}, conn *net.Conn)
 	} else {
 		// We use identity as clientId for servers
 		clientId := identity
+		conn := data["Conn"].(*net.Conn)
 		response, err := n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
 		return response, err
 	}
 }
 
 // Sets some basic variables and other things for internal communication between newton instances
-func (n *Newton) startInternalCommunication(data map[string]interface{}, conn *net.Conn) {
+func (n *Newton) startInternalCommunication(data map[string]interface{}) {
 	// TODO: Check existence
 	secret, _ := data["SessionSecret"].(string)
 	var identity string
 	var value *ServerItem
+	conn := data["Conn"].(*net.Conn)
 
 	// Find the table item
 	n.InternalConnTable.RLock()

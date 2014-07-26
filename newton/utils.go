@@ -80,7 +80,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 	return n.msgToByte(msg)
 }
 
-// TODO: Rename this
+// Generates an error message
 func (n *Newton) returnError(args ...int) ([]byte, error) {
 	code := 0
 	if len(args) == 2 {

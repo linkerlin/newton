@@ -15,6 +15,9 @@ import (
 
 const ReleaseVersion = "0.0.1"
 
+// Defines a function
+type actionHandler func(map[string]interface{}) ([]byte, error)
+
 // Newton instance struct
 type Newton struct {
 	Config            *config.Config
@@ -27,6 +30,7 @@ type Newton struct {
 	UserStore         *store.UserStore
 	ClusterStore      *store.ClusterStore
 	InternalConnTable *InternalConnTable
+	ActionHandlers    map[int]actionHandler // Ships action handlers
 }
 
 // Stores active client sessions by clientId
@@ -89,6 +93,9 @@ func New(c *config.Config) *Newton {
 	cl := store.NewClusterStore(c)
 	ict := &InternalConnTable{i: make(map[string]*ServerItem)}
 
+	// Action handlers map
+	act := make(map[int]actionHandler)
+
 	return &Newton{
 		Config:            c,
 		Log:               l,
@@ -100,6 +107,7 @@ func New(c *config.Config) *Newton {
 		UserStore:         us,
 		ClusterStore:      cl,
 		InternalConnTable: ict,
+		ActionHandlers:    act,
 	}
 }
 
@@ -173,6 +181,8 @@ func (n *Newton) RunServer() {
 
 		// Expire idle connections or reschedule them
 		go n.maintainActiveClients()
+
+		n.setActionHandlers()
 
 		// go n.internalConnection("lpms")
 
@@ -252,73 +262,65 @@ func (n *Newton) readConn(buff []byte, conn *net.Conn) bool {
 	return true
 }
 
+// Maps action handler functions
+func (n *Newton) setActionHandlers() {
+	n.ActionHandlers[cstream.AuthenticateUser] = n.authenticateUser
+	n.ActionHandlers[cstream.CreateUser] = n.createUser
+	n.ActionHandlers[cstream.CreateUserClient] = n.createUserClient
+	n.ActionHandlers[cstream.AuthenticateServer] = n.authenticateServer
+}
+
 // Parse and dispatch incoming messages
 func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
-	var ok, closeConn bool = false, false
-	var returnResponse bool = true
+	var ok bool = false
 	var response []byte
 	var action int
 
 	// Send an error message
-	onerror := func(status, code int) {
+	handleError := func(status, code int) {
 		// FIXME: Handle serialization errors
 		m, e := n.returnError(status, code)
 		if e != nil {
 			n.Log.Error("Internal Server Error: %s", e.Error())
 		}
 		(*conn).Write(m)
-		if closeConn {
-			(*conn).Close()
+		for s := range []int{cstream.AuthenticateServer, cstream.AuthenticateUser, cstream.BadMessage} {
+			if action == s {
+				(*conn).Close()
+			}
 		}
 	}
 
 	err := json.Unmarshal(buff, &request)
 	if err != nil {
-		closeConn = true
-		onerror(cstream.BadMessage, 0)
+		handleError(cstream.BadMessage, 0)
 	} else if request != nil {
 		items := request.(map[string]interface{})
-		// Check Action
 		// We need int but encoding/json returns float64 for numbers
 		// This is a pretty bad hack but it works :|
 		var s float64
 		s, ok = items["Action"].(float64)
 		if !ok {
-			closeConn = true
-			onerror(cstream.BadMessage, cstream.ActionRequired)
+			handleError(cstream.BadMessage, cstream.ActionRequired)
 		}
 		action = int(s)
 
-		// TODO: We need a better message and error handling mech.
-		// Dispatch incoming messages and run related functions
-		switch {
-		case action == cstream.AuthenticateUser:
-			response, err = n.authenticateUser(items, conn)
-			// Close connection on error
-			closeConn = true
-		case action == cstream.CreateUser:
-			response, err = n.createUser(items)
-		case action == cstream.CreateUserClient:
-			response, err = n.createUserClient(items)
-		case action == cstream.AuthenticateServer:
-			response, err = n.authenticateServer(items, conn)
-			// Close connection on error
-			closeConn = true
-		case action == cstream.Authenticated:
-			// TODO: Think about potential security vulnerables
-			// This is an internal connection between newton instances
-			n.startInternalCommunication(items, conn)
-			returnResponse = false
-		}
-
-		if returnResponse {
+		// Set the connection pointer for later use
+		items["Conn"] = conn
+		if action == cstream.Authenticated {
+			// This is a custom action, no need for a return value
+			n.startInternalCommunication(items)
+		} else if handler, ok := n.ActionHandlers[action]; ok {
+			response, err = handler(items)
 			if err != nil {
 				n.Log.Error("SERVER ERROR: %s", err.Error())
-				onerror(action, cstream.ServerError)
+				handleError(action, cstream.ServerError)
 			} else {
 				(*conn).Write(response)
 			}
+		} else {
+			handleError(cstream.BadMessage, cstream.UnknownAction)
 		}
 	}
 }
