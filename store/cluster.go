@@ -70,7 +70,8 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 	secret := murmur.HashString(tmp)
 	// New server item
 	server := &Server{
-		Identity:     identity,
+		Identity: identity, // This is garbage
+		//Alive: alive,
 		WanIp:        wanIp,
 		WanPort:      wanPort,
 		InternalIp:   internalIp,
