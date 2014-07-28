@@ -6,11 +6,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/cstream"
 	"github.com/purak/newton/message"
 	"github.com/purak/newton/store"
+	"github.com/purak/newton/utils"
 )
 
 // Check password and create and SessionSecret for authenticate the client
@@ -42,16 +42,12 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 
 	// Create a new clientItem
 	expireAt := time.Now().Unix() + n.Config.Server.ClientAnnounceInterval
-	ss, err := uuid.NewV4()
-	if err != nil {
-		n.Log.Error(err.Error())
-		return n.returnError(cstream.AuthenticationFailed, cstream.ServerError)
-	}
+	sessionSecret := utils.NewUUIDv1(n.Config.Server.Identity)
 
 	now := time.Now().Unix()
 	clientItem := &ClientItem{
 		LastAnnounce:  now,
-		SessionSecret: ss.String(),
+		SessionSecret: sessionSecret.String(),
 		Conn:          conn,
 	}
 
@@ -74,7 +70,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 
 	msg := &message.Authenticated{
 		Action:        cstream.Authenticated,
-		SessionSecret: ss.String(),
+		SessionSecret: sessionSecret.String(),
 	}
 
 	return n.msgToByte(msg)

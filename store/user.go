@@ -1,12 +1,12 @@
 package store
 
 import (
-	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
+	"github.com/purak/newton/utils"
 )
 
 type UserStore struct {
@@ -50,30 +50,25 @@ func NewUserStore(c *config.Config) *UserStore {
 }
 
 // Creates a new user item on Gauss database
-func (u *UserStore) Create(username, password string) error {
+func (u *UserStore) Create(username, password string) {
 	// Create a unique salt string.
-	salt, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
+	salt := utils.NewUUIDv1(u.Config.Server.Identity).String()
 
-	saltStr := salt.String()
-	tmp := saltStr + password
+	tmp := salt + password
 	secret := murmur.HashString(tmp)
 	// New user item
 	user := &User{
 		Username: username,
-		Salt:     saltStr,
+		Salt:     salt,
 		Secret:   secret,
 	}
 
 	// Serialize the user
+	// TODO: Error cases?
 	bytes := common.MustJSONEncode(user)
 	// Put it in the database
 	// TODO: this function must have a return Action
 	u.Conn.Put(murmur.HashString(username), bytes)
-
-	return nil
 }
 
 // Gets an user from database
@@ -90,16 +85,13 @@ func (u *UserStore) Get(username string) (user *User, existed bool) {
 }
 
 // Creates a new ClientId
-func (u *UserStore) CreateUserClient(username string) (string, error) {
+func (u *UserStore) CreateUserClient(username string) string {
 	// Create a UUID.
-	unique, err := uuid.NewV4()
-	if err != nil {
-		return "", err
-	}
-	clientId := username + "@" + unique.String()
+	unique := utils.NewUUIDv1(u.Config.Server.Identity).String()
+	clientId := username + "@" + unique
 	// Put it in the database
 	u.Conn.SubPut(murmur.HashString(username), []byte(clientId), nil)
-	return clientId, nil
+	return clientId
 }
 
 // Checks clientId existence

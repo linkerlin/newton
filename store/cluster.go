@@ -3,12 +3,12 @@ package store
 import (
 	"errors"
 
-	"github.com/nu7hatch/gouuid"
 	"github.com/purak/gauss/common"
 	"github.com/purak/gauss/gconn" // Client library for Gauss"
 	"github.com/purak/gauss/murmur"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/cstream"
+	"github.com/purak/newton/utils"
 )
 
 // ClusterStore is a database object for maintaining newton instances on Gauss
@@ -58,15 +58,11 @@ func NewClusterStore(c *config.Config) *ClusterStore {
 }
 
 // Creates a new server item on Gauss database
-func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, internalPort string) error {
+func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, internalPort string) {
 	// Create a unique salt string.
-	salt, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
+	salt := utils.NewUUIDv1(c.Config.Server.Identity).String()
 
-	saltStr := salt.String()
-	tmp := saltStr + password
+	tmp := salt + password
 	secret := murmur.HashString(tmp)
 	// New server item
 	server := &Server{
@@ -76,7 +72,7 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 		WanPort:      wanPort,
 		InternalIp:   internalIp,
 		InternalPort: internalPort,
-		Salt:         saltStr,
+		Salt:         salt,
 		Secret:       secret,
 	}
 
@@ -85,8 +81,6 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 	// Put it in the database
 	// TODO: this function must have a return Action
 	c.Conn.Put(murmur.HashString(identity), bytes)
-
-	return nil
 }
 
 // Gets a server item from database

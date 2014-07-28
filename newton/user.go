@@ -56,19 +56,8 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	_, existed := n.UserStore.Get(username)
 	if !existed {
 		// Finally, create a new user
-		err := n.UserStore.Create(username, password)
-
-		if err != nil {
-			n.Log.Error(err.Error())
-			return n.returnError(cstream.AuthenticationFailed, cstream.ServerError)
-		}
-
-		clientId, err := n.UserStore.CreateUserClient(username)
-		if err != nil {
-			n.Log.Error(err.Error())
-			return n.returnError(cstream.AuthenticationFailed, cstream.ServerError)
-		}
-
+		n.UserStore.Create(username, password)
+		clientId := n.UserStore.CreateUserClient(username)
 		msg := &message.ClientId{
 			Action:   cstream.SetClientId,
 			ClientId: clientId,
@@ -92,11 +81,7 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 		return n.returnError(cstream.CreateUserClientFailed, cstream.MaxClientCountExceeded)
 	}
 
-	clientId, err := n.UserStore.CreateUserClient(username)
-	if err != nil {
-		n.Log.Error(err.Error())
-		return n.returnError(cstream.CreateUserClientFailed, cstream.ServerError)
-	}
+	clientId := n.UserStore.CreateUserClient(username)
 
 	msg := &message.ClientId{
 		Action:   cstream.SetClientId,
