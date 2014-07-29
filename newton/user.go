@@ -9,9 +9,9 @@ import (
 
 // Authenticate and create a new client session for the client
 func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
-	clientId, ok := data["ClientId"].(string)
+	clientID, ok := data["clientID"].(string)
 	if !ok {
-		return n.returnError(cstream.AuthenticationFailed, cstream.ClientIdRequired)
+		return n.returnError(cstream.AuthenticationFailed, cstream.ClientIDRequired)
 	}
 
 	username, ok := data["Username"].(string)
@@ -28,15 +28,14 @@ func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
 	user, ok := n.UserStore.Get(username)
 	if !ok {
 		return n.returnError(cstream.AuthenticationFailed, cstream.UsernameNotFound)
-	} else {
-		existed := n.UserStore.CheckUserClient(username, clientId)
-		if existed {
-			conn := data["Conn"].(*net.Conn)
-			return n.authenticateConn(user.Salt, password, clientId, user.Secret, conn)
-		} else {
-			return n.returnError(cstream.AuthenticationFailed, cstream.ClientIdNotFound)
-		}
 	}
+	existed := n.UserStore.CheckUserClient(username, clientID)
+	if existed {
+		conn := data["Conn"].(*net.Conn)
+		return n.authenticateConn(user.Salt, password, clientID, user.Secret, conn)
+	}
+	return n.returnError(cstream.AuthenticationFailed, cstream.ClientIDNotFound)
+
 }
 
 // Creates a new user
@@ -57,15 +56,14 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	if !existed {
 		// Finally, create a new user
 		n.UserStore.Create(username, password)
-		clientId := n.UserStore.CreateUserClient(username)
-		msg := &message.ClientId{
-			Action:   cstream.SetClientId,
-			ClientId: clientId,
+		clientID := n.UserStore.CreateUserClient(username)
+		msg := &message.ClientID{
+			Action:   cstream.SetClientID,
+			ClientID: clientID,
 		}
 		return n.msgToByte(msg)
-	} else {
-		return n.returnError(cstream.AuthenticationFailed, cstream.AlredyExist)
 	}
+	return n.returnError(cstream.AuthenticationFailed, cstream.AlredyExist)
 }
 
 // Creates a new client for the user
@@ -81,11 +79,11 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 		return n.returnError(cstream.CreateUserClientFailed, cstream.MaxClientCountExceeded)
 	}
 
-	clientId := n.UserStore.CreateUserClient(username)
+	clientID := n.UserStore.CreateUserClient(username)
 
-	msg := &message.ClientId{
-		Action:   cstream.SetClientId,
-		ClientId: clientId,
+	msg := &message.ClientID{
+		Action:   cstream.SetClientID,
+		ClientID: clientID,
 	}
 	return n.msgToByte(msg)
 }

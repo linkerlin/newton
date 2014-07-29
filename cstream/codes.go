@@ -9,7 +9,7 @@ const (
 	DeleteServer
 	CreateUser
 	CreateUserClient
-	SetClientId
+	SetClientID
 	PostMessage
 	DeleteMessage
 )
@@ -41,11 +41,11 @@ const (
 	PasswordRequired
 	IdentityNotFound
 	UsernameNotFound
-	ClientIdNotFound
+	ClientIDNotFound
 	ActionRequired
 	HasAnotherConnection
 	MaxClientCountExceeded
 	AlredyExist
-	ClientIdRequired
+	ClientIDRequired
 	UnknownAction
 )

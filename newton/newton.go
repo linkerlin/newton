@@ -13,12 +13,13 @@ import (
 	"github.com/cstream/newton/store"
 )
 
+// RelaseVersion is the program version.
 const ReleaseVersion = "0.0.1"
 
 // Defines a function
 type actionHandler func(map[string]interface{}) ([]byte, error)
 
-// Newton instance struct
+// Newton represents a new instance.
 type Newton struct {
 	Config            *config.Config
 	Log               cstream.Logger
@@ -33,39 +34,39 @@ type Newton struct {
 	ActionHandlers    map[int]actionHandler // Ships action handlers
 }
 
-// Stores active client sessions by clientId
+// ConnTable stores active client sessions by clientID.
 type ConnTable struct {
 	sync.RWMutex // To protect maps
 	m            map[string]*ClientItem
 }
 
-// Stores active client sessions by pointer of net.Conn
+// ConnClientTable stores active client sessions by pointer of net.Conn.
 type ConnClientTable struct {
 	sync.RWMutex // To protect maps
 	c            map[*net.Conn]*ClientItem
 }
 
-// A container structure for active clients
+// ClientItem is a container structure for active clients.
 type ClientItem struct {
 	LastAnnounce  int64
 	SessionSecret string
 	Conn          *net.Conn
 }
 
-// Stores opened sockets for other newton instances
+// InternalConnTable stores opened sockets for other newton instances.
 type InternalConnTable struct {
 	sync.RWMutex // To protect maps
 	i            map[string]*ServerItem
 }
 
-// Stores opened sessions on the other newton instances
+// ServerItem stores opened sessions on the other newton instances.
 type ServerItem struct {
 	Conn          *net.Conn
 	Outgoing      chan []byte
 	SessionSecret string
 }
 
-// Create a new Newton instance
+// New creates a new Newton instance
 func New(c *config.Config) *Newton {
 	// Create a new configuration state
 	if c == nil {
@@ -112,12 +113,12 @@ func New(c *config.Config) *Newton {
 }
 
 // Extend expire time for active clients.
-func (n *Newton) rescheduleClientTimeout(clientId string, ci *ClientItem) bool {
+func (n *Newton) rescheduleClientTimeout(clientID string, ci *ClientItem) bool {
 	secondsAgo := time.Now().Unix() - ci.LastAnnounce
 	if secondsAgo < n.Config.Server.ClientAnnounceInterval {
 		newExpireAt := time.Now().Unix() + (n.Config.Server.ClientAnnounceInterval - secondsAgo)
 		item := &store.Item{
-			Value: clientId,
+			Value: clientID,
 			TTL:   newExpireAt,
 		}
 		heap.Push(n.ActiveClients, item)
@@ -135,20 +136,20 @@ func (n *Newton) maintainActiveClients() {
 		select {
 		case <-tick.C:
 			if n.ActiveClients.Len() > 0 {
-				clientId := n.ActiveClients.Expire()
-				if len(clientId) > 0 {
+				clientID := n.ActiveClients.Expire()
+				if len(clientID) > 0 {
 					// Read lock
 					n.ConnTable.RLock()
-					clientItem := n.ConnTable.m[clientId]
+					clientItem := n.ConnTable.m[clientID]
 					n.ConnTable.RUnlock()
 
 					if clientItem != nil {
 						// Check last activity and reschedule the conn if required.
-						if reAdd := n.rescheduleClientTimeout(clientId, clientItem); reAdd != true {
+						if reAdd := n.rescheduleClientTimeout(clientID, clientItem); reAdd != true {
 							conn := *clientItem.Conn
-							delete(n.ConnTable.m, clientId)
+							delete(n.ConnTable.m, clientID)
 							if err := conn.Close(); err != nil {
-								n.Log.Warning("TCP conn for %s could not be expired: %s", clientId, err.Error())
+								n.Log.Warning("TCP conn for %s could not be expired: %s", clientID, err.Error())
 							}
 						}
 					}
@@ -161,7 +162,7 @@ func (n *Newton) maintainActiveClients() {
 	}
 }
 
-// Run a new Newton server instance
+// RunServer starts a new Newton server instance
 func (n *Newton) RunServer() {
 	addr := n.Config.Server.Addr
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", addr)
@@ -199,7 +200,7 @@ func (n *Newton) RunServer() {
 	}
 }
 
-// Handles client announce sockets
+// ClientHandler waits for new messages for opened connections.
 func (n *Newton) ClientHandler(conn *net.Conn) {
 	// Question: What about the bufio package?
 	buff := make([]byte, 1024)
@@ -273,9 +274,10 @@ func (n *Newton) setActionHandlers() {
 // Parse and dispatch incoming messages
 func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var request interface{}
-	var ok bool = false
+	var ok bool
 	var response []byte
 	var action int
+	ok = false
 
 	// Send an error message
 	handleError := func(status, code int) {
@@ -333,10 +335,10 @@ func (n *Newton) internalConnection(identity string) {
 		n.Log.Warning("%s could not be found on cluster.", identity)
 	} else {
 		var serverAddr string
-		if server.InternalIp != "" {
-			serverAddr = server.InternalIp + ":" + server.InternalPort
+		if server.InternalIP != "" {
+			serverAddr = server.InternalIP + ":" + server.InternalPort
 		} else {
-			serverAddr = server.WanIp + ":" + server.WanPort
+			serverAddr = server.WanIP + ":" + server.WanPort
 		}
 
 		// Make a connection between the instance and us.
@@ -367,7 +369,7 @@ func (n *Newton) internalConnection(identity string) {
 			}
 			n.InternalConnTable.Unlock()
 			// Send authentication credentials
-			// Remember that we use identity as clientId for newton instances
+			// Remember that we use identity as clientID for newton instances
 			n.Log.Info("Sending authentication request to %s", serverAddr)
 			go n.authenticateServerReq(n.Config.Server.Identity, n.Config.Server.Password, &conn)
 

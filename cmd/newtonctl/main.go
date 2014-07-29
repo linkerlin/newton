@@ -17,6 +17,7 @@ newtonctl -- configure newtond and get information at runtime
 HELP TEXT
 `
 
+// Usage prints help text for newtonctl tool
 func Usage() string {
 	return strings.TrimSpace(usage)
 }

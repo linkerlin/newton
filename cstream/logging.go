@@ -10,6 +10,7 @@ import (
 	"github.com/koding/logging"
 )
 
+// Level indicates the logging level
 type Level int
 
 var (
@@ -46,7 +47,7 @@ type Logger interface {
 	Debug(format string, args ...interface{})
 }
 
-// getLogLevel returns the logging level defined via the NEWTON_LOG_LEVEL
+// GetLogLevel returns the logging level defined via the NEWTON_LOG_LEVEL
 // environment. It returns Info by default if no environment variable
 // is set.
 func GetLogLevel() Level {
@@ -65,7 +66,7 @@ func GetLogLevel() Level {
 	}
 }
 
-// convertLevel converst a newton level into logging level
+// ConvertLevel converst a newton level into logging level
 func ConvertLevel(l Level) logging.Level {
 	switch l {
 	case DEBUG:
@@ -81,7 +82,7 @@ func ConvertLevel(l Level) logging.Level {
 	}
 }
 
-// newLogger returns a new newton logger based on koding/logging package and a
+// NewLogger returns a new newton logger based on koding/logging package and a
 // SetLogLvel function. The current logLevel is INFO by default, which can be
 // changed with NEWTON_LOG_LEVEL environment variable.
 func NewLogger(name string) (Logger, func(Level)) {

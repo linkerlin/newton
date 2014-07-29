@@ -29,6 +29,7 @@ func (pq PriorityQueue) Swap(i, j int) {
 	pq[j].Index = j
 }
 
+// Push is a function for adding items to the queue
 func (pq *PriorityQueue) Push(x interface{}) {
 	n := len(*pq)
 	item := x.(*Item)
@@ -36,6 +37,7 @@ func (pq *PriorityQueue) Push(x interface{}) {
 	*pq = append(*pq, item)
 }
 
+// Pop removes an element from PriorityQueue
 func (pq *PriorityQueue) Pop() interface{} {
 	old := *pq
 	n := len(old)
@@ -45,7 +47,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 	return item
 }
 
-// update modifies the priority and value of an Item in the queue.
+// Update modifies the priority and value of an Item in the queue.
 func (pq *PriorityQueue) Update(item *Item, Value string, TTL int64) {
 	heap.Remove(pq, item.Index)
 	item.Value = Value
@@ -53,7 +55,7 @@ func (pq *PriorityQueue) Update(item *Item, Value string, TTL int64) {
 	heap.Push(pq, item)
 }
 
-// Cleans expired items in the queue
+// Expire removes expired items from the queue
 func (pq *PriorityQueue) Expire() string {
 	old := *pq
 	n := len(old)

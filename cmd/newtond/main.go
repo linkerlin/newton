@@ -26,6 +26,7 @@ Client Communication Options:
   -addr=<host:port>         The public host:port used for client communication.
 `
 
+// Usage prints help text for newtond tool
 func Usage() string {
 	return strings.TrimSpace(usage)
 }

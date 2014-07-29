@@ -19,18 +19,18 @@ type ClusterStore struct {
 	Log         cstream.Logger
 }
 
-// Defines a new Newton instance on the DHT/database
+// Server represents a new Newton instance on the DHT/database
 type Server struct {
 	Identity     string
-	WanIp        string // Outbound interface IP
+	WanIP        string // Outbound interface IP
 	WanPort      string // Outbound port
-	InternalIp   string // Inbound interface IP, for only rack-aware setups
+	InternalIP   string // Inbound interface IP, for only rack-aware setups
 	InternalPort string // Inbound port
 	Salt         string
 	Secret       []byte
 }
 
-// Creates a new socket for reaching cluster members
+// NewClusterStore creates a new socket for reaching cluster members
 func NewClusterStore(c *config.Config) *ClusterStore {
 	// Create a new logger
 	l, setlevel := cstream.NewLogger("ClusterStore")
@@ -57,8 +57,8 @@ func NewClusterStore(c *config.Config) *ClusterStore {
 	}
 }
 
-// Creates a new server item on Gauss database
-func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, internalPort string) {
+// Create creates a new server item on Gauss database
+func (c *ClusterStore) Create(identity, password, wanIP, wanPort, internalIP, internalPort string) {
 	// Create a unique salt string.
 	salt := utils.NewUUIDv1(c.Config.Server.Identity).String()
 
@@ -66,11 +66,10 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 	secret := murmur.HashString(tmp)
 	// New server item
 	server := &Server{
-		Identity: identity, // This is garbage
-		//Alive: alive,
-		WanIp:        wanIp,
+		Identity:     identity, // This is garbage
+		WanIP:        wanIP,
 		WanPort:      wanPort,
-		InternalIp:   internalIp,
+		InternalIP:   internalIP,
 		InternalPort: internalPort,
 		Salt:         salt,
 		Secret:       secret,
@@ -83,7 +82,7 @@ func (c *ClusterStore) Create(identity, password, wanIp, wanPort, internalIp, in
 	c.Conn.Put(murmur.HashString(identity), bytes)
 }
 
-// Gets a server item from database
+// Get is a function that gets server item from database
 func (c *ClusterStore) Get(identity string) (server *Server, existed bool) {
 	key := murmur.HashString(identity)
 	// Try to fetch the server
@@ -96,7 +95,7 @@ func (c *ClusterStore) Get(identity string) (server *Server, existed bool) {
 	return server, existed
 }
 
-// Delete the server item from database
+// Delete is a function that deletes the server item from database
 func (c *ClusterStore) Delete(identity string) error {
 	key := murmur.HashString(identity)
 	c.Conn.Del(key)

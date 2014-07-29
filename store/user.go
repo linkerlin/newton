@@ -9,6 +9,7 @@ import (
 	"github.com/cstream/newton/utils"
 )
 
+// UserStore stores functions to manage users.
 type UserStore struct {
 	Config      *config.Config
 	Conn        *gconn.Conn
@@ -16,13 +17,14 @@ type UserStore struct {
 	Log         cstream.Logger
 }
 
+// User represents an user item on the database.
 type User struct {
 	Username string
 	Salt     string
 	Secret   []byte
 }
 
-// Creates a new socket for reaching User items
+// NewUserStore creates a new socket for reaching User items
 func NewUserStore(c *config.Config) *UserStore {
 	// Create a new logger
 	l, setlevel := cstream.NewLogger("UserStore")
@@ -49,7 +51,7 @@ func NewUserStore(c *config.Config) *UserStore {
 	}
 }
 
-// Creates a new user item on Gauss database
+// Create is a function for creating new user items on Gauss database.
 func (u *UserStore) Create(username, password string) {
 	// Create a unique salt string.
 	salt := utils.NewUUIDv1(u.Config.Server.Identity).String()
@@ -71,7 +73,7 @@ func (u *UserStore) Create(username, password string) {
 	u.Conn.Put(murmur.HashString(username), bytes)
 }
 
-// Gets an user from database
+// Get returns an user item from database.
 func (u *UserStore) Get(username string) (user *User, existed bool) {
 	key := murmur.HashString(username)
 	// Try to fetch the user
@@ -84,38 +86,38 @@ func (u *UserStore) Get(username string) (user *User, existed bool) {
 	return user, existed
 }
 
-// Creates a new ClientId
+// CreateUserClient creates a new clientID
 func (u *UserStore) CreateUserClient(username string) string {
 	// Create a UUID.
 	unique := utils.NewUUIDv1(u.Config.Server.Identity).String()
-	clientId := username + "@" + unique
+	clientID := username + "@" + unique
 	// Put it in the database
-	u.Conn.SubPut(murmur.HashString(username), []byte(clientId), nil)
-	return clientId
+	u.Conn.SubPut(murmur.HashString(username), []byte(clientID), nil)
+	return clientID
 }
 
-// Checks clientId existence
-func (u *UserStore) CheckUserClient(username, clientId string) bool {
+// CheckUserClient checks clientID existence
+func (u *UserStore) CheckUserClient(username, clientID string) bool {
 	key := murmur.HashString(username)
 	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
 	for _, item := range items {
-		if string(item.Key) == clientId {
+		if string(item.Key) == clientID {
 			return true
 		}
 	}
 	return false
 }
 
-// Gets UserClient items for the given key
+// GetUserClients returns clients for the given key
 func (u *UserStore) GetUserClients(username string) []common.Item {
 	key := murmur.HashString(username)
 	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
 	return items
 }
 
-// TODO: this function must have a return Action
-// Gets UserClient items for the given key
-func (u *UserStore) DeleteUserClient(username string, clientId []byte) {
+// DeleteUserClient deletes client items for the given key
+func (u *UserStore) DeleteUserClient(username string, clientID []byte) {
+	// TODO: DeleteUserClient must have a return Action
 	key := murmur.HashString(username)
-	u.Conn.SubDel(key, clientId)
+	u.Conn.SubDel(key, clientID)
 }

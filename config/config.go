@@ -10,8 +10,9 @@ import (
 
 // FIXME: 32 bit compabilty is a problem for configuration items
 
-const DefaultSystemConfigPath = "data/newton.conf"
+const defaultSystemConfigPath = "data/newton.conf"
 
+// Config is the configuration container for newton instances
 type Config struct {
 	SystemPath  string
 	ShowHelp    bool
@@ -20,6 +21,7 @@ type Config struct {
 	Database    DatabaseInfo
 }
 
+// ServerInfo contains configuration items which is related to newton daemon
 type ServerInfo struct {
 	Addr                   string `toml:"addr"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
@@ -27,11 +29,13 @@ type ServerInfo struct {
 	Password               string `toml:"password"`
 }
 
+// DatabaseInfo contains configuration items which is related to Gauss database daemon
 type DatabaseInfo struct {
 	Addr          string `toml:"addr"`
 	MaxUserClient int    `toml:"maxUserClient"`
 }
 
+// Load starts configuration loading process
 func (c *Config) Load(arguments []string) error {
 	var path string
 	f := flag.NewFlagSet("newton", -1)
@@ -59,7 +63,7 @@ func (c *Config) Load(arguments []string) error {
 	return nil
 }
 
-// Loads from the system newton configuration file if it exists.
+// LoadSystemFile is a function that loads from the system newton configuration file if it exists.
 func (c *Config) LoadSystemFile() error {
 	if _, err := os.Stat(c.SystemPath); os.IsNotExist(err) {
 		return nil
@@ -67,7 +71,7 @@ func (c *Config) LoadSystemFile() error {
 	return c.LoadFile(c.SystemPath)
 }
 
-// Loads configuration from command line flags.
+// LoadFlags is a function that loads configuration from command line flags.
 func (c *Config) LoadFlags(arguments []string) error {
 	f := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	f.SetOutput(ioutil.Discard)
@@ -94,15 +98,15 @@ func (c *Config) LoadFlags(arguments []string) error {
 	return nil
 }
 
-// Loads configuration from a file.
+// LoadFile is a function that loads configuration from a file.
 func (c *Config) LoadFile(path string) error {
 	_, err := toml.DecodeFile(path, &c)
 	return err
 }
 
-// Creates a new configuration
+// New creates a new configuration object
 func New() *Config {
 	c := new(Config)
-	c.SystemPath = DefaultSystemConfigPath
+	c.SystemPath = defaultSystemConfigPath
 	return c
 }

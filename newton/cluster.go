@@ -92,13 +92,13 @@ func (n *Newton) authenticateServer(data map[string]interface{}) ([]byte, error)
 	server, ok := n.ClusterStore.Get(identity)
 	if !ok {
 		return n.returnError(cstream.AuthenticationFailed, cstream.IdentityNotFound)
-	} else {
-		// We use identity as clientId for servers
-		clientId := identity
-		conn := data["Conn"].(*net.Conn)
-		response, err := n.authenticateConn(server.Salt, password, clientId, server.Secret, conn)
-		return response, err
 	}
+	// We use identity as clientID for servers
+	clientID := identity
+	conn := data["Conn"].(*net.Conn)
+	response, err := n.authenticateConn(server.Salt, password, clientID, server.Secret, conn)
+	return response, err
+
 }
 
 // Sets some basic variables and other things for internal communication between newton instances

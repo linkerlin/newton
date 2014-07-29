@@ -14,7 +14,7 @@ import (
 )
 
 // Check password and create and SessionSecret for authenticate the client
-func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte, conn *net.Conn) ([]byte, error) {
+func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte, conn *net.Conn) ([]byte, error) {
 	// Recreate the secret and compare
 	tmpSecret := murmur.HashString(salt + password)
 	if !bytes.Equal(secret, tmpSecret) {
@@ -25,7 +25,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 
 	// Go's maps are not thread-safe
 	n.ConnTable.RLock()
-	_, ok := n.ConnTable.m[clientId]
+	_, ok := n.ConnTable.m[clientID]
 	n.ConnTable.RUnlock()
 
 	if ok {
@@ -35,7 +35,7 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 		n.ConnClientTable.Unlock()
 
 		n.ConnTable.Lock()
-		delete(n.ConnTable.m, clientId)
+		delete(n.ConnTable.m, clientID)
 		n.ConnTable.Unlock()
 		return n.returnError(cstream.AuthenticationFailed, cstream.HasAnotherConnection)
 	}
@@ -53,14 +53,14 @@ func (n *Newton) authenticateConn(salt, password, clientId string, secret []byte
 
 	// Add a new item to priority queue
 	item := &store.Item{
-		Value: clientId,
+		Value: clientID,
 		TTL:   expireAt,
 	}
 	n.ClientQueue <- item
 
 	// Set to ConnTable
 	n.ConnTable.Lock()
-	n.ConnTable.m[clientId] = clientItem
+	n.ConnTable.m[clientID] = clientItem
 	n.ConnTable.Unlock()
 
 	// Set to ConnClientTable
