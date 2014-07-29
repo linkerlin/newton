@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/purak/newton/config"
-	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/store"
+	"github.com/cstream/newton/config"
+	"github.com/cstream/newton/cstream"
+	"github.com/cstream/newton/store"
 )
 
 const ReleaseVersion = "0.0.1"

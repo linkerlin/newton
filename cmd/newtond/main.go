@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/purak/newton/config"
-	"github.com/purak/newton/newton"
+	"github.com/cstream/newton/config"
+	"github.com/cstream/newton/newton"
 )
 
 var version = "0.0.1"

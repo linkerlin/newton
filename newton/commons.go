@@ -6,11 +6,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/purak/gauss/murmur"
-	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/message"
-	"github.com/purak/newton/store"
-	"github.com/purak/newton/utils"
+	"github.com/cstream/gauss/murmur"
+	"github.com/cstream/newton/cstream"
+	"github.com/cstream/newton/message"
+	"github.com/cstream/newton/store"
+	"github.com/cstream/newton/utils"
 )
 
 // Check password and create and SessionSecret for authenticate the client

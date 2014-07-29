@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/purak/newton/cstream"
+	"github.com/cstream/newton/cstream"
 )
 
 // Functions to manipulate and manage ClusterStore data.

@@ -3,12 +3,12 @@ package store
 import (
 	"errors"
 
-	"github.com/purak/gauss/common"
-	"github.com/purak/gauss/gconn" // Client library for Gauss"
-	"github.com/purak/gauss/murmur"
-	"github.com/purak/newton/config"
-	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/utils"
+	"github.com/cstream/gauss/common"
+	"github.com/cstream/gauss/gconn" // Client library for Gauss"
+	"github.com/cstream/gauss/murmur"
+	"github.com/cstream/newton/config"
+	"github.com/cstream/newton/cstream"
+	"github.com/cstream/newton/utils"
 )
 
 // ClusterStore is a database object for maintaining newton instances on Gauss

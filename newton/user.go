@@ -3,8 +3,8 @@ package newton
 import (
 	"net"
 
-	"github.com/purak/newton/cstream"
-	"github.com/purak/newton/message"
+	"github.com/cstream/newton/cstream"
+	"github.com/cstream/newton/message"
 )
 
 // Authenticate and create a new client session for the client
