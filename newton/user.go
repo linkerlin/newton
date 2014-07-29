@@ -9,7 +9,7 @@ import (
 
 // Authenticate and create a new client session for the client
 func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
-	clientID, ok := data["clientID"].(string)
+	clientID, ok := data["ClientID"].(string)
 	if !ok {
 		return n.returnError(cstream.AuthenticationFailed, cstream.ClientIDRequired)
 	}
