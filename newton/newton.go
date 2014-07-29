@@ -127,31 +127,32 @@ func (n *Newton) rescheduleClientTimeout(clientID string, ci *ClientItem) bool {
 	return false
 }
 
-// Maintain currently active clients. This information is required to
-// pass messages correctly.
+// Maintain currently active clients. This information is required to pass messages correctly.
 func (n *Newton) maintainActiveClients() {
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		select {
 		case <-tick.C:
-			if n.ActiveClients.Len() > 0 {
-				clientID := n.ActiveClients.Expire()
-				if len(clientID) > 0 {
-					// Read lock
-					n.ConnTable.RLock()
-					clientItem := n.ConnTable.m[clientID]
-					n.ConnTable.RUnlock()
+			if n.ActiveClients.Len() == 0 {
+				break
+			}
+			clientID := n.ActiveClients.Expire()
+			if len(clientID) == 0 {
+				break
+			}
+			// Read lock
+			n.ConnTable.RLock()
+			clientItem := n.ConnTable.m[clientID]
+			n.ConnTable.RUnlock()
 
-					if clientItem != nil {
-						// Check last activity and reschedule the conn if required.
-						if reAdd := n.rescheduleClientTimeout(clientID, clientItem); reAdd != true {
-							conn := *clientItem.Conn
-							delete(n.ConnTable.m, clientID)
-							if err := conn.Close(); err != nil {
-								n.Log.Warning("TCP conn for %s could not be expired: %s", clientID, err.Error())
-							}
-						}
+			if clientItem != nil {
+				// Check last activity and reschedule the conn if required.
+				if reAdd := n.rescheduleClientTimeout(clientID, clientItem); reAdd != true {
+					conn := *clientItem.Conn
+					delete(n.ConnTable.m, clientID)
+					if err := conn.Close(); err != nil {
+						n.Log.Warning("TCP conn for %s could not be expired: %s", clientID, err.Error())
 					}
 				}
 			}
