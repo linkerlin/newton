@@ -21,13 +21,12 @@ type ClusterStore struct {
 
 // Server represents a new Newton instance on the DHT/database
 type Server struct {
-	Identity     string
-	WanIP        string // Outbound interface IP
-	WanPort      string // Outbound port
-	InternalIP   string // Inbound interface IP, for only rack-aware setups
-	InternalPort string // Inbound port
-	Salt         string
-	Secret       []byte
+	Identity   string
+	WanIP      string // Outbound interface IP
+	Port       string
+	InternalIP string // Inbound interface IP, for only rack-aware setups
+	Salt       string
+	Secret     []byte
 }
 
 // NewClusterStore creates a new socket for reaching cluster members
@@ -58,7 +57,7 @@ func NewClusterStore(c *config.Config) *ClusterStore {
 }
 
 // Create creates a new server item on Gauss database
-func (c *ClusterStore) Create(identity, password, wanIP, wanPort, internalIP, internalPort string) {
+func (c *ClusterStore) Create(identity, password, wanIP, port, internalIP string) {
 	// Create a unique salt string.
 	salt := utils.NewUUIDv1(c.Config.Server.Identity).String()
 
@@ -66,13 +65,12 @@ func (c *ClusterStore) Create(identity, password, wanIP, wanPort, internalIP, in
 	secret := murmur.HashString(tmp)
 	// New server item
 	server := &Server{
-		Identity:     identity, // This is garbage
-		WanIP:        wanIP,
-		WanPort:      wanPort,
-		InternalIP:   internalIP,
-		InternalPort: internalPort,
-		Salt:         salt,
-		Secret:       secret,
+		Identity:   identity,
+		WanIP:      wanIP,
+		Port:       port,
+		InternalIP: internalIP,
+		Salt:       salt,
+		Secret:     secret,
 	}
 
 	// Serialize the server item

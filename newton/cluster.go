@@ -1,67 +1,52 @@
 package newton
 
 import (
+	"errors"
 	"net"
 	"time"
 
 	"github.com/cstream/newton/cstream"
 )
 
-// Functions to manipulate and manage ClusterStore data.
-/*
 // Creates a new server item on the cluster
-func (n *Newton) createServer() ([]byte, error) {
-	// Sending the identity and password is a necessity.
-	identity, ok := data["Identity"].(string)
-	if !ok {
-		return nil, BadMessage, errors.New("Identity is required.")
+func (n *Newton) createOrUpdateServer() error {
+	// TODO: remove this if blocks after adding configration checking function.
+	if n.Config.Server.Identity == "" {
+		return errors.New("Identity is required.")
 	}
-	password, ok := data["Password"].(string)
-	if !ok {
-		return nil, BadMessage, errors.New("Password is required.")
+	if n.Config.Server.Password == "" {
+		return errors.New("Password is required.")
 	}
 
-	// The following variables is optional but to define a server properly
-	// the system admininstrator has to send one of that kind of IP addresses at least.
-
-	// WanIP is the external IP address for the server
-	wanIp, _ := data["WanIp"].(string)
-	wanPort, _ := data["WanPort"].(string)
-	// InternalIp is the in-rack/in-datacenter IP address for the server
-	internalIp, _ := data["InternalIp"].(string)
-	internalPort, _ := data["InternalPort"].(string)
-
-	if wanIp == "" || wanPort == "" {
-		if internalIp == "" || internalPort == "" {
-			return nil, BadMessage, errors.New("Missing IP or port data.")
-		}
+	if n.Config.Server.WanIP == "" && n.Config.Server.InternalIP == "" {
+		return errors.New("Missing IP address.")
 	}
 
-	// Fake parameters
-	identity := "lpms"
-	password := "hadron"
-	internalIp := "127.0.0.1"
-	internalPort := "8080"
-	wanIp := "8.8.8.8"
-	wanPort := "5000"
+	createServer := func() error {
+		// Finally, create a new server on the cluster
+		n.ClusterStore.Create(n.Config.Server.Identity, n.Config.Server.Password,
+			n.Config.Server.WanIP, n.Config.Server.Port, n.Config.Server.InternalIP)
+		return nil
+	}
 
 	// Firstly, check the key existence
-	_, existed := n.ClusterStore.Get(identity)
+	server, existed := n.ClusterStore.Get(n.Config.Server.Identity)
 	if !existed {
-		// Finally, create a new server on the cluster
-		err := n.ClusterStore.Create(identity, password, wanIp, wanPort, internalIp, internalPort)
-
-		if err != nil {
-			n.Log.Error(err.Error())
-			return n.returnError(cstream.CreateServerFailed, cstream.ServerError)
-		}
-		// Authenticate server in the same time
-		return nil, nil
-	} else {
-		return n.returnError(cstream.CreateServerFailed, cstream.AlredyExist)
+		return createServer()
 	}
+
+	if n.Config.Server.WanIP != server.WanIP || n.Config.Server.InternalIP !=
+		server.InternalIP || n.Config.Server.Port != server.Port {
+		err := n.ClusterStore.Delete(n.Config.Server.Identity)
+		if err != nil {
+			return err
+		}
+		return createServer()
+	}
+	return nil
 }
 
+/*
 // Deletes a server from cluster
 func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 	identity, ok := data["Identity"].(string)
@@ -74,7 +59,7 @@ func (n *Newton) deleteServer(data map[string]interface{}) ([]byte, error) {
 		return n.returnError(cstream.DeleteServerFailed, cstream.ServerError)
 	}
 	return nil, nil
-} */
+}*/
 
 // Authenticates servers to communicate with each others
 func (n *Newton) authenticateServer(data map[string]interface{}) ([]byte, error) {

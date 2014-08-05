@@ -179,7 +179,10 @@ func (n *Newton) RunServer() {
 	go n.maintainActiveClients()
 
 	n.setActionHandlers()
-
+	err = n.createOrUpdateServer()
+	if err != nil {
+		n.Log.Fatal(err.Error())
+	}
 	// go n.internalConnection("lpms")
 
 	// Listen incoming connections and start a goroutine to handle
@@ -329,10 +332,11 @@ func (n *Newton) internalConnection(identity string) {
 		n.Log.Warning("%s could not be found on cluster.", identity)
 	} else {
 		var serverAddr string
+		// TODO: Review this.
 		if server.InternalIP != "" {
-			serverAddr = server.InternalIP + ":" + server.InternalPort
+			serverAddr = server.InternalIP + ":" + server.Port
 		} else {
-			serverAddr = server.WanIP + ":" + server.WanPort
+			serverAddr = server.WanIP + ":" + server.Port
 		}
 
 		// Make a connection between the instance and us.

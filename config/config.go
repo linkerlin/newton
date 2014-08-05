@@ -29,6 +29,7 @@ type ServerInfo struct {
 	Identity               string `toml:"identity"`
 	Password               string `toml:"password"`
 	WanIP                  string `toml:"wanIP"`
+	InternalIP             string `toml:"internalIP"`
 }
 
 // DatabaseInfo contains configuration items which are related to Gauss database daemon.
@@ -78,6 +79,7 @@ func (c *Config) LoadFlags(arguments []string) error {
 	f.StringVar(&c.Server.Identity, "identity", c.Server.Identity, "")
 	f.StringVar(&c.Server.Password, "password", c.Server.Password, "")
 	f.StringVar(&c.Server.WanIP, "wan-ip", c.Server.WanIP, "")
+	f.StringVar(&c.Server.InternalIP, "internal-ip", c.Server.InternalIP, "")
 
 	// Database parameters
 	f.StringVar(&c.Database.Addr, "database-addr", c.Database.Addr, "")
