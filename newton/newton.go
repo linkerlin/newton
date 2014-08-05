@@ -165,38 +165,31 @@ func (n *Newton) maintainActiveClients() {
 
 // RunServer starts a new Newton server instance
 func (n *Newton) RunServer() {
-	addr := n.Config.Server.Addr
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", addr)
+	netListen, err := net.Listen("tcp4", n.Config.Server.Port)
 
 	if err != nil {
 		n.Log.Fatal(err.Error())
-	} else {
-		netListen, err := net.Listen(tcpAddr.Network(), tcpAddr.String())
+	}
 
+	// TODO: Override that method
+	defer netListen.Close()
+	n.Log.Info("Listening on port %s", n.Config.Server.Port)
+
+	// Expire idle connections or reschedule them
+	go n.maintainActiveClients()
+
+	n.setActionHandlers()
+
+	// go n.internalConnection("lpms")
+
+	// Listen incoming connections and start a goroutine to handle
+	// clients
+	for {
+		conn, err := netListen.Accept()
 		if err != nil {
-			n.Log.Fatal(err.Error())
-		}
-
-		// TODO: Override that method
-		defer netListen.Close()
-		n.Log.Info("Listening on port %s", n.Config.Server.Addr)
-
-		// Expire idle connections or reschedule them
-		go n.maintainActiveClients()
-
-		n.setActionHandlers()
-
-		// go n.internalConnection("lpms")
-
-		// Listen incoming connections and start a goroutine to handle
-		// clients
-		for {
-			conn, err := netListen.Accept()
-			if err != nil {
-				n.Log.Fatal("Client Error: ", err.Error())
-			} else {
-				go n.ClientHandler(&conn)
-			}
+			n.Log.Fatal("Client Error: ", err.Error())
+		} else {
+			go n.ClientHandler(&conn)
 		}
 	}
 }

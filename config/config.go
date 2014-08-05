@@ -9,27 +9,29 @@ import (
 )
 
 // FIXME: 32 bit compabilty is a problem for configuration items
-
-const defaultSystemConfigPath = "data/newton.conf"
+const envConfigFile = "NEWTON_CONFIG_PATH"
+const localConfigFile = "data/newton.conf"
+const systemConfigFile = "/etc/newton/newton.conf"
 
 // Config is the configuration container for newton instances
 type Config struct {
-	SystemPath  string
+	ConfigFile  string
 	ShowHelp    bool
 	ShowVersion bool
 	Server      ServerInfo
 	Database    DatabaseInfo
 }
 
-// ServerInfo contains configuration items which is related to newton daemon
+// ServerInfo contains configuration items which are related to newton daemon.
 type ServerInfo struct {
-	Addr                   string `toml:"addr"`
+	Port                   string `toml:"port"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
 	Identity               string `toml:"identity"`
 	Password               string `toml:"password"`
+	WanIP                  string `toml:"wanIP"`
 }
 
-// DatabaseInfo contains configuration items which is related to Gauss database daemon
+// DatabaseInfo contains configuration items which are related to Gauss database daemon.
 type DatabaseInfo struct {
 	Addr          string `toml:"addr"`
 	MaxUserClient int    `toml:"maxUserClient"`
@@ -43,16 +45,13 @@ func (c *Config) Load(arguments []string) error {
 	f.StringVar(&path, "config", "", "path to config file")
 	f.Parse(arguments)
 
-	// Load from system file.
-	if err := c.LoadSystemFile(); err != nil {
-		return err
+	// Load from config file specified in arguments.
+	if path == "" {
+		path = c.ConfigFile
 	}
 
-	// Load from config file specified in arguments.
-	if path != "" {
-		if err := c.LoadFile(path); err != nil {
-			return err
-		}
+	if err := c.LoadFile(path); err != nil {
+		return err
 	}
 
 	// Load from command line flags.
@@ -61,14 +60,6 @@ func (c *Config) Load(arguments []string) error {
 	}
 
 	return nil
-}
-
-// LoadSystemFile is a function that loads from the system newton configuration file if it exists.
-func (c *Config) LoadSystemFile() error {
-	if _, err := os.Stat(c.SystemPath); os.IsNotExist(err) {
-		return nil
-	}
-	return c.LoadFile(c.SystemPath)
 }
 
 // LoadFlags is a function that loads configuration from command line flags.
@@ -82,10 +73,11 @@ func (c *Config) LoadFlags(arguments []string) error {
 	f.BoolVar(&c.ShowVersion, "version", false, "")
 
 	// Server parameters
-	f.StringVar(&c.Server.Addr, "addr", c.Server.Addr, "")
+	f.StringVar(&c.Server.Port, "port", c.Server.Port, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
 	f.StringVar(&c.Server.Identity, "identity", c.Server.Identity, "")
 	f.StringVar(&c.Server.Password, "password", c.Server.Password, "")
+	f.StringVar(&c.Server.WanIP, "wan-ip", c.Server.WanIP, "")
 
 	// Database parameters
 	f.StringVar(&c.Database.Addr, "database-addr", c.Database.Addr, "")
@@ -107,6 +99,18 @@ func (c *Config) LoadFile(path string) error {
 // New creates a new configuration object
 func New() *Config {
 	c := new(Config)
-	c.SystemPath = defaultSystemConfigPath
+	c.ConfigFile = configFile()
 	return c
+}
+
+func configFile() string {
+	e := os.Getenv(envConfigFile)
+	if _, err := os.Stat(e); err == nil {
+		return e
+	} else if _, err := os.Stat(localConfigFile); err == nil {
+		return localConfigFile
+	} else if _, err := os.Stat(systemConfigFile); err == nil {
+		return systemConfigFile
+	}
+	return ""
 }
