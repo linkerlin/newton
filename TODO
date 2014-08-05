@@ -1,5 +1,6 @@
 TODO for 0.0.1 
 ============== 
+* Check configuration file health
 * Better exception handling
 * Unit testing
 * Design documentation
