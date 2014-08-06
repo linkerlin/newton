@@ -1,4 +1,4 @@
-package message
+package comm
 
 // Authenticated represents a message for SessionSecret
 type Authenticated struct {

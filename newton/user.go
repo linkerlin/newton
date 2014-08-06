@@ -3,8 +3,8 @@ package newton
 import (
 	"net"
 
+	"github.com/cstream/newton/comm"
 	"github.com/cstream/newton/cstream"
-	"github.com/cstream/newton/message"
 )
 
 // Authenticate and create a new client session for the client
@@ -57,7 +57,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 		// Finally, create a new user
 		n.UserStore.Create(username, password)
 		clientID := n.UserStore.CreateUserClient(username)
-		msg := &message.ClientID{
+		msg := &comm.ClientID{
 			Action:   cstream.SetClientID,
 			ClientID: clientID,
 		}
@@ -81,7 +81,7 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 
 	clientID := n.UserStore.CreateUserClient(username)
 
-	msg := &message.ClientID{
+	msg := &comm.ClientID{
 		Action:   cstream.SetClientID,
 		ClientID: clientID,
 	}

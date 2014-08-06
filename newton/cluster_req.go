@@ -3,16 +3,16 @@ package newton
 import (
 	"net"
 
+	"github.com/cstream/newton/comm"
 	"github.com/cstream/newton/cstream"
-	"github.com/cstream/newton/message"
 )
 
 // Functions to manipulate ClusterStore data on a remote server
 
-// Sends a message to create a new server
+// Sends a comm to create a new server
 func (n *Newton) createServerReq(conn *net.Conn) {
 	// Dummy values for test
-	/*msg := &message.CreateServer{
+	/*msg := &comm.CreateServer{
 		Action:         "CreateServer",
 		Idendity:     "lpms",
 		Password:     "hadron",
@@ -22,10 +22,10 @@ func (n *Newton) createServerReq(conn *net.Conn) {
 	//n.createServer(msg)
 }
 
-// Sends a message to delete the server from cluster
+// Sends a comm to delete the server from cluster
 func (n *Newton) deleteServerReq(identity string) (interface{}, error) {
 	// Dummy values for test
-	msg := &message.DeleteServer{
+	msg := &comm.DeleteServer{
 		Action:   cstream.DeleteServer,
 		Identity: identity,
 	}
@@ -33,9 +33,9 @@ func (n *Newton) deleteServerReq(identity string) (interface{}, error) {
 	return msg, nil
 }
 
-// Sends a message for authentication
+// Sends a comm for authentication
 func (n *Newton) authenticateServerReq(identity, password string, conn *net.Conn) {
-	msg := &message.AuthenticateServer{
+	msg := &comm.AuthenticateServer{
 		Action:   cstream.AuthenticateServer,
 		Identity: identity,
 		Password: password,

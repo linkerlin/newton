@@ -130,7 +130,7 @@ func (n *Newton) consumeOutgoingChannel(outgoing chan []byte, conn *net.Conn) {
 func (n *Newton) heartbeat(outgoing chan []byte) {
 	tick := time.NewTicker(4 * time.Second)
 	defer tick.Stop()
-	// Empty message
+	// Empty comm
 	hb := make([]byte, 1)
 	for {
 		select {

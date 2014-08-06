@@ -183,7 +183,8 @@ func (n *Newton) RunServer() {
 	if err != nil {
 		n.Log.Fatal(err.Error())
 	}
-	// go n.internalConnection("lpms")
+
+	//go n.internalConnection("test1")
 
 	// Listen incoming connections and start a goroutine to handle
 	// clients
@@ -202,7 +203,7 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 	// Question: What about the bufio package?
 	buff := make([]byte, 1024)
 
-	// Close the connection if no message received.
+	// Close the connection if no comm received.
 	var isReal bool
 	go func() {
 		tick := time.NewTicker(5 * time.Second)
@@ -232,14 +233,14 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 
 		now := time.Now().Unix()
 		if ok && len(buff) == 0 {
-			// Heartbeat message, update clientItem
+			// Heartbeat comm, update clientItem
 			clientItem.LastAnnounce = now
 		} else {
 			if ok {
 				// This is an authenticated client, update last activity data.
 				clientItem.LastAnnounce = now
 			}
-			// If the message Action is CreateSession, the connection record
+			// If the comm Action is CreateSession, the connection record
 			// will be created.
 			go n.dispatchMessages(buff, conn)
 		}
@@ -276,7 +277,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 	var action int
 	ok = false
 
-	// Send an error message
+	// Send an error comm
 	handleError := func(status, code int) {
 		// FIXME: Handle serialization errors
 		m, e := n.returnError(status, code)
@@ -332,12 +333,13 @@ func (n *Newton) internalConnection(identity string) {
 		n.Log.Warning("%s could not be found on cluster.", identity)
 	} else {
 		var serverAddr string
-		// TODO: Review this.
-		if server.InternalIP != "" {
-			serverAddr = server.InternalIP + ":" + server.Port
+		/*if server.InternalIP != "" {
+			serverAddr = server.InternalIP + server.Port
 		} else {
-			serverAddr = server.WanIP + ":" + server.Port
-		}
+			serverAddr = server.WanIP + server.Port
+		}*/
+		// TODO: This is a temporary fix
+		serverAddr = "127.0.0.1" + server.Port
 
 		// Make a connection between the instance and us.
 		conn, err := net.Dial("tcp4", serverAddr)
@@ -382,7 +384,7 @@ func (n *Newton) internalConnection(identity string) {
 	}
 }
 
-// Writes a message throught an opened connection
+// Writes a comm throught an opened connection
 func (n *Newton) writeMessage(msg interface{}, conn *net.Conn) {
 	response, err := json.Marshal(msg)
 	if err != nil {

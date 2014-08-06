@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/cstream/gauss/murmur"
+	"github.com/cstream/newton/comm"
 	"github.com/cstream/newton/cstream"
-	"github.com/cstream/newton/message"
 	"github.com/cstream/newton/store"
 	"github.com/cstream/newton/utils"
 )
@@ -68,7 +68,7 @@ func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte
 	n.ConnClientTable.c[conn] = clientItem
 	n.ConnClientTable.Unlock()
 
-	msg := &message.Authenticated{
+	msg := &comm.Authenticated{
 		Action:        cstream.Authenticated,
 		SessionSecret: sessionSecret.String(),
 	}
@@ -76,13 +76,13 @@ func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte
 	return n.msgToByte(msg)
 }
 
-// Generates an error message
+// Generates an error comm
 func (n *Newton) returnError(args ...int) ([]byte, error) {
 	code := 0
 	if len(args) == 2 {
 		code = args[1]
 	}
-	msg := message.Error{
+	msg := comm.Error{
 		Action: args[0],
 		Code:   code,
 	}
