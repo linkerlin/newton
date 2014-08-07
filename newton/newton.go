@@ -30,6 +30,7 @@ type Newton struct {
 	ConnClientTable   *ConnClientTable
 	UserStore         *store.UserStore
 	ClusterStore      *store.ClusterStore
+	MessageStore      *store.MessageStore
 	InternalConnTable *InternalConnTable
 	ActionHandlers    map[int]actionHandler // Ships action handlers
 }
@@ -97,6 +98,9 @@ func New(c *config.Config) *Newton {
 	// Action handlers map
 	act := make(map[int]actionHandler)
 
+	// New MessageStore
+	m := store.NewMessageStore(c)
+
 	return &Newton{
 		Config:            c,
 		Log:               l,
@@ -107,6 +111,7 @@ func New(c *config.Config) *Newton {
 		ConnClientTable:   cct,
 		UserStore:         us,
 		ClusterStore:      cl,
+		MessageStore:      m,
 		InternalConnTable: ict,
 		ActionHandlers:    act,
 	}
