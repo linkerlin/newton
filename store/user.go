@@ -108,16 +108,31 @@ func (u *UserStore) CheckUserClient(username, clientID string) bool {
 	return false
 }
 
-// GetUserClients returns clients for the given key
+// GetUserClients returns clients items for given username.
 func (u *UserStore) GetUserClients(username string) []common.Item {
 	key := murmur.HashString(username)
 	items := u.Conn.SliceLen(key, nil, true, u.Config.Database.MaxUserClient)
 	return items
 }
 
-// DeleteUserClient deletes client items for the given key
+// DeleteUserClient deletes a client item with the clientID and username.
 func (u *UserStore) DeleteUserClient(username string, clientID []byte) {
 	// TODO: DeleteUserClient must have a return Action
 	key := murmur.HashString(username)
 	u.Conn.SubDel(key, clientID)
+}
+
+// SetClientHost sets actively used host for the given clientID.
+func (u *UserStore) SetClientHost(username, clientID, identity string) {
+	u.Conn.SSubPut(murmur.HashString(username), []byte(clientID), []byte(identity))
+}
+
+// GetClientHost returns actively used host for the given clientID.
+func (u *UserStore) GetClientHost(username, clientID string) ([]byte, bool) {
+	return u.Conn.SubGet(murmur.HashString(username), []byte(clientID))
+}
+
+// DelClientHost deletes host identity for the given clientID.
+func (u *UserStore) DelClientHost(username, clientID string) {
+	u.Conn.SSubDel(murmur.HashString(username), []byte(clientID))
 }

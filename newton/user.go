@@ -32,7 +32,11 @@ func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
 	existed := n.UserStore.CheckUserClient(username, clientID)
 	if existed {
 		conn := data["Conn"].(*net.Conn)
-		return n.authenticateConn(user.Salt, password, clientID, user.Secret, conn)
+		res, err := n.authenticateConn(user.Salt, password, clientID, user.Secret, conn)
+		if err == nil {
+			n.UserStore.SetClientHost(username, clientID, n.Config.Server.Identity)
+		}
+		return res, err
 	}
 	return n.returnError(cstream.AuthenticationFailed, cstream.ClientIDNotFound)
 
