@@ -40,3 +40,28 @@ func NewMessageStore(c *config.Config) *MessageStore {
 		Config:      c,
 	}
 }
+
+// SetUserMessage sets a user message with a MsgID.
+func (m *MessageStore) SetUserMessage(username string, data map[string]interface{}) error {
+	key := username + "@msg"
+	subKey := data["MsgID"].(string)
+	msg, err := cstream.InterfaceToBytes(data)
+	if err != nil {
+		return err
+	}
+	m.Conn.SSubPut([]byte(key), []byte(subKey), msg)
+	return nil
+}
+
+// GetUserMessage returns a user message with a MsgID.
+func (m *MessageStore) GetUserMessage(username, msgID string) ([]byte, bool) {
+	//TODO: What about the return value? Conver it into a suitable format.
+	key := username + "@msg"
+	return m.Conn.SubGet([]byte(key), []byte(msgID))
+}
+
+// DelUserMessage deletes a user message with a MsgID.
+func (m *MessageStore) DelUserMessage(username, msgID string) {
+	key := username + "@msg"
+	m.Conn.SubDel([]byte(key), []byte(msgID))
+}
