@@ -1,6 +1,8 @@
 package cstream
 
 import (
+	"bytes"
+	"encoding/gob"
 	"net"
 )
 
@@ -15,7 +17,7 @@ func Last(s string, b byte) int {
 	return i
 }
 
-// ParseIP removes port from a network address of the form "host:port"
+// ParseIP removes port from a network address of the form "host:port".
 func ParseIP(rawIP string) (string, error) {
 	i := Last(rawIP, ':')
 	if i < 0 {
@@ -27,4 +29,15 @@ func ParseIP(rawIP string) (string, error) {
 	}
 	return ip, nil
 
+}
+
+// InterfaceToBytes converts arbitrary interface to byte array.
+func InterfaceToBytes(key interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(key)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
