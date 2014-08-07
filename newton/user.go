@@ -35,10 +35,6 @@ func (n *Newton) authenticateUser(data map[string]interface{}) ([]byte, error) {
 		res, err := n.authenticateConn(user.Salt, password, clientID, user.Secret, conn)
 		if err == nil {
 			n.UserStore.SetClientHost(username, clientID, n.Config.Server.Identity)
-			// Cache sibling clients
-			clientItem, _ := n.ConnTable.m[clientID]
-			clientItem.Siblings = n.UserStore.GetUserClients(username)
-			n.ConnTable.m[clientID] = clientItem
 		}
 		return res, err
 	}

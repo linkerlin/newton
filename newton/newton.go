@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cstream/gauss/common"
 	"github.com/cstream/newton/config"
 	"github.com/cstream/newton/cstream"
 	"github.com/cstream/newton/store"
@@ -52,7 +51,6 @@ type ConnClientTable struct {
 type ClientItem struct {
 	LastAnnounce  int64
 	SessionSecret string
-	Siblings      []common.Item
 	Conn          *net.Conn
 }
 
