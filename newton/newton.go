@@ -326,7 +326,7 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 		} else if handler, ok := n.ActionHandlers[action]; ok {
 			response, err = handler(items)
 			if err != nil {
-				n.Log.Error("SERVER ERROR: %s", err.Error())
+				n.Log.Error("Internal error: %s", err.Error())
 				handleError(action, cstream.ServerError)
 			} else {
 				(*conn).Write(response)
