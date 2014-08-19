@@ -26,23 +26,24 @@ type Newton struct {
 	SetLogLevel       func(cstream.Level)
 	ActiveClients     *store.PriorityQueue
 	ClientQueue       chan *store.Item
+	ClientTable       *ClientTable
 	ConnTable         *ConnTable
-	ConnClientTable   *ConnClientTable
 	UserStore         *store.UserStore
 	ClusterStore      *store.ClusterStore
 	MessageStore      *store.MessageStore
 	InternalConnTable *InternalConnTable
 	ActionHandlers    map[int]actionHandler // Ships action handlers
+	TrackUserQueries  chan string
 }
 
-// ConnTable stores active client sessions by clientID.
-type ConnTable struct {
+// ClientTable stores active client sessions by clientID.
+type ClientTable struct {
 	sync.RWMutex // To protect maps
 	m            map[string]*ClientItem
 }
 
-// ConnClientTable stores active client sessions by pointer of net.Conn.
-type ConnClientTable struct {
+// ConnTable stores active client sessions by pointer of net.Conn.
+type ConnTable struct {
 	sync.RWMutex // To protect maps
 	c            map[*net.Conn]*ClientItem
 }
@@ -82,8 +83,8 @@ func New(c *config.Config) *Newton {
 	heap.Init(pq)
 
 	// Connection table
-	ct := &ConnTable{m: make(map[string]*ClientItem)}
-	cct := &ConnClientTable{c: make(map[*net.Conn]*ClientItem)}
+	ct := &ClientTable{m: make(map[string]*ClientItem)}
+	cct := &ConnTable{c: make(map[*net.Conn]*ClientItem)}
 
 	// ClientQueue for thread safety
 	cq := make(chan *store.Item, 1000)
@@ -101,19 +102,22 @@ func New(c *config.Config) *Newton {
 	// New MessageStore
 	m := store.NewMessageStore(c)
 
+	t := make(chan string, 1000)
+
 	return &Newton{
 		Config:            c,
 		Log:               l,
 		SetLogLevel:       setlevel,
 		ActiveClients:     pq,
 		ClientQueue:       cq,
-		ConnTable:         ct,
-		ConnClientTable:   cct,
+		ClientTable:       ct,
+		ConnTable:         cct,
 		UserStore:         us,
 		ClusterStore:      cl,
 		MessageStore:      m,
 		InternalConnTable: ict,
 		ActionHandlers:    act,
+		TrackUserQueries:  t,
 	}
 }
 
@@ -147,15 +151,15 @@ func (n *Newton) maintainActiveClients() {
 				break
 			}
 			// Read lock
-			n.ConnTable.RLock()
-			clientItem := n.ConnTable.m[clientID]
-			n.ConnTable.RUnlock()
+			n.ClientTable.RLock()
+			clientItem := n.ClientTable.m[clientID]
+			n.ClientTable.RUnlock()
 
 			if clientItem != nil {
 				// Check last activity and reschedule the conn if required.
 				if reAdd := n.rescheduleClientTimeout(clientID, clientItem); reAdd != true {
 					conn := *clientItem.Conn
-					delete(n.ConnTable.m, clientID)
+					delete(n.ClientTable.m, clientID)
 					if err := conn.Close(); err != nil {
 						n.Log.Warning("TCP conn for %s could not be expired: %s", clientID, err.Error())
 					}
@@ -189,7 +193,10 @@ func (n *Newton) RunServer() {
 		n.Log.Fatal(err.Error())
 	}
 
-	//go n.internalConnection("test1")
+	// Run a UDP server for internal lookup requests
+	go n.runUDPServer()
+	// Run tracker to update currently online user list.
+	go n.runTracker()
 
 	// Listen incoming connections and start a goroutine to handle
 	// clients
@@ -232,9 +239,9 @@ func (n *Newton) ClientHandler(conn *net.Conn) {
 		// Remove NULL characters
 		buff = bytes.Trim(buff, "\x00")
 
-		n.ConnClientTable.RLock()
-		clientItem, ok := n.ConnClientTable.c[conn]
-		n.ConnClientTable.RUnlock()
+		n.ConnTable.RLock()
+		clientItem, ok := n.ConnTable.c[conn]
+		n.ConnTable.RUnlock()
 
 		now := time.Now().Unix()
 		if ok && len(buff) == 0 {

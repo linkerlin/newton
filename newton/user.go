@@ -70,7 +70,7 @@ func (n *Newton) createUser(data map[string]interface{}) ([]byte, error) {
 	return n.returnError(cstream.AuthenticationFailed, cstream.AlredyExist)
 }
 
-// Creates a new client for the user
+// Creates a new client for the user.
 func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	// Check username
 	username, ok := data["Username"].(string)
@@ -80,7 +80,7 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 
 	clients := n.UserStore.GetUserClients(username)
 	if len(clients) >= n.Config.Database.MaxUserClient {
-		return n.returnError(cstream.CreateUserClientFailed, cstream.MaxClientCountExceeded)
+		return n.returnError(cstream.CreateUserClientFailed, cstream.ThresholdExceeded)
 	}
 
 	clientID := n.UserStore.CreateUserClient(username)
@@ -88,6 +88,27 @@ func (n *Newton) createUserClient(data map[string]interface{}) ([]byte, error) {
 	msg := &comm.ClientID{
 		Action:   cstream.SetClientID,
 		ClientID: clientID,
+	}
+	return n.msgToByte(msg)
+}
+
+// Triggers the tracker to find the user's currently opened sessions on the cluster.
+func (n *Newton) lookupUser(data map[string]interface{}) ([]byte, error) {
+	// Check username
+	usernames, ok := data["Usernames"].([]string)
+	// FIXME: Do we need a database request to check that user is real?
+	if !ok {
+		return n.returnError(cstream.LookupUserFailed, cstream.UsernameRequired)
+	}
+	if len(usernames) > cstream.MaxUsernameCount {
+		return n.returnError(cstream.LookupUserFailed, cstream.ThresholdExceeded)
+	}
+
+	for _, username := range usernames {
+		n.TrackUserQueries <- username
+	}
+	msg := &comm.Success{
+		Action: cstream.LookupUserSuccess,
 	}
 	return n.msgToByte(msg)
 }

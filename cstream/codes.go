@@ -12,15 +12,18 @@ const (
 	SetClientID
 	PostMessage
 	DeleteMessage
+	LookupUser
+	UserOnline
 )
 
 // Success Codes
 const (
 	PostMessageSuccess int = 200 + iota
 	DeleteMessageSuccess
+	LookupUserSuccess
 )
 
-// Fail codes
+// Fail codes for actions
 const (
 	AuthenticationFailed int = 300 + iota
 	AuthenticationRequired
@@ -31,6 +34,7 @@ const (
 	PostMessageFailed
 	DeleteMessageFailed
 	BadMessage
+	LookupUserFailed
 )
 
 // More spesific fail codes
@@ -44,8 +48,14 @@ const (
 	ClientIDNotFound
 	ActionRequired
 	HasAnotherConnection
-	MaxClientCountExceeded
+	ThresholdExceeded
 	AlredyExist
 	ClientIDRequired
 	UnknownAction
+)
+
+// Action codes for tracker
+const (
+	TrackUser int = 500 + iota
+	AnnounceUser
 )

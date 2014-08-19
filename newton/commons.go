@@ -24,19 +24,19 @@ func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte
 	// Authentication is done after that time
 
 	// Go's maps are not thread-safe
-	n.ConnTable.RLock()
-	_, ok := n.ConnTable.m[clientID]
-	n.ConnTable.RUnlock()
+	n.ClientTable.RLock()
+	_, ok := n.ClientTable.m[clientID]
+	n.ClientTable.RUnlock()
 
 	if ok {
 		// FIXME: Remove the previous connection, why?
-		n.ConnClientTable.Lock()
-		delete(n.ConnClientTable.c, conn)
-		n.ConnClientTable.Unlock()
-
 		n.ConnTable.Lock()
-		delete(n.ConnTable.m, clientID)
+		delete(n.ConnTable.c, conn)
 		n.ConnTable.Unlock()
+
+		n.ClientTable.Lock()
+		delete(n.ClientTable.m, clientID)
+		n.ClientTable.Unlock()
 		return n.returnError(cstream.AuthenticationFailed, cstream.HasAnotherConnection)
 	}
 
@@ -58,15 +58,15 @@ func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte
 	}
 	n.ClientQueue <- item
 
+	// Set to ClientTable
+	n.ClientTable.Lock()
+	n.ClientTable.m[clientID] = clientItem
+	n.ClientTable.Unlock()
+
 	// Set to ConnTable
 	n.ConnTable.Lock()
-	n.ConnTable.m[clientID] = clientItem
+	n.ConnTable.c[conn] = clientItem
 	n.ConnTable.Unlock()
-
-	// Set to ConnClientTable
-	n.ConnClientTable.Lock()
-	n.ConnClientTable.c[conn] = clientItem
-	n.ConnClientTable.Unlock()
 
 	msg := &comm.Authenticated{
 		Action:        cstream.Authenticated,

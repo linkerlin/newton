@@ -25,6 +25,7 @@ type Config struct {
 // ServerInfo contains configuration items which are related to newton daemon.
 type ServerInfo struct {
 	Port                   string `toml:"port"`
+	TrackerPort            int    `toml:"trackerPort"`
 	ClientAnnounceInterval int64  `toml:"clientAnnounceInterval"`
 	Identity               string `toml:"identity"`
 	Password               string `toml:"password"`
@@ -75,6 +76,7 @@ func (c *Config) LoadFlags(arguments []string) error {
 
 	// Server parameters
 	f.StringVar(&c.Server.Port, "port", c.Server.Port, "")
+	f.IntVar(&c.Server.TrackerPort, "trackerPort", c.Server.TrackerPort, "")
 	f.Int64Var(&c.Server.ClientAnnounceInterval, "client-announce-interval", c.Server.ClientAnnounceInterval, "")
 	f.StringVar(&c.Server.Identity, "identity", c.Server.Identity, "")
 	f.StringVar(&c.Server.Password, "password", c.Server.Password, "")
