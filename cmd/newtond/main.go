@@ -9,9 +9,8 @@ import (
 	"github.com/cstream/newton/newton"
 )
 
-var version = "0.0.1"
 var usage = `
-newtond -- distributed message relaying and static file server
+newtond -- distributed message proxy server
 
 Usage:
   newtond -addr <addr>
@@ -38,7 +37,7 @@ func main() {
 		fmt.Println(err.Error() + "\n")
 		os.Exit(1)
 	} else if config.ShowVersion {
-		fmt.Println("newton version", newton.ReleaseVersion)
+		fmt.Println("newtond version", newton.ReleaseVersion)
 		os.Exit(0)
 	} else if config.ShowHelp {
 		fmt.Println(Usage() + "\n")
