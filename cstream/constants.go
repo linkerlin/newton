@@ -11,3 +11,6 @@ const TrackerWriteInterval = 1
 
 // Maximum time for trackUser routines in  milliseconds.
 const TrackUserThreshold = 5000
+
+// RouteItemExpireInterval, in seconds
+const RouteItemExpireInterval = 300

@@ -34,6 +34,8 @@ type Newton struct {
 	InternalConnTable *InternalConnTable
 	ActionHandlers    map[int]actionHandler // Ships action handlers
 	TrackUserQueries  chan string
+	RoutingQueue      chan TrackerEvent
+	RoutingTable      *RoutingTable
 }
 
 // ClientTable stores active client sessions by clientID.
@@ -50,9 +52,10 @@ type ConnTable struct {
 
 // ClientItem is a container structure for active clients.
 type ClientItem struct {
-	LastAnnounce  int64
+	LastAnnounce  int64 //TODO: Rename this.
 	SessionSecret string
 	Conn          *net.Conn
+	ActivityEvent chan string // A channel for receiving events about other user's active sessions.
 }
 
 // InternalConnTable stores opened sockets for other newton instances.
@@ -66,6 +69,23 @@ type ServerItem struct {
 	Conn          *net.Conn
 	Outgoing      chan []byte
 	SessionSecret string
+}
+
+type RouteItem struct {
+	Processed   bool
+	ExpireAt    int64
+	ClientItems []RouteClientItem
+	Subscribers []*ClientItem
+}
+
+type RouteClientItem struct {
+	ClientID string
+	Location string
+}
+
+type RoutingTable struct {
+	sync.RWMutex
+	r map[string]*RouteItem
 }
 
 // New creates a new Newton instance
@@ -102,7 +122,10 @@ func New(c *config.Config) *Newton {
 	// New MessageStore
 	m := store.NewMessageStore(c)
 
+	// Tracker queries
 	t := make(chan string, 1000)
+	rt := &RoutingTable{r: make(map[string]*RouteItem)}
+	rq := make(chan TrackerEvent, 100)
 
 	return &Newton{
 		Config:            c,
@@ -118,6 +141,8 @@ func New(c *config.Config) *Newton {
 		InternalConnTable: ict,
 		ActionHandlers:    act,
 		TrackUserQueries:  t,
+		RoutingQueue:      rq,
+		RoutingTable:      rt,
 	}
 }
 
@@ -279,6 +304,7 @@ func (n *Newton) setActionHandlers() {
 	n.ActionHandlers[cstream.CreateUser] = n.createUser
 	n.ActionHandlers[cstream.CreateUserClient] = n.createUserClient
 	n.ActionHandlers[cstream.AuthenticateServer] = n.authenticateServer
+	n.ActionHandlers[cstream.LookupUser] = n.lookupUser
 }
 
 // Parse and dispatch incoming messages
@@ -320,6 +346,13 @@ func (n *Newton) dispatchMessages(buff []byte, conn *net.Conn) {
 
 		// Set the connection pointer for later use
 		items["Conn"] = conn
+
+		// Set the authenticated client if it exists.
+		c, ok := n.ConnTable.c[conn]
+		if ok {
+			items["ClientItem"] = c
+		}
+
 		if action == cstream.Authenticated {
 			// This is a custom action, no need for a return value
 			n.startInternalCommunication(items)

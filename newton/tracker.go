@@ -9,6 +9,21 @@ import (
 	"github.com/cstream/newton/cstream"
 )
 
+type TrackerEvent interface {
+	PerformUsername()
+}
+
+type AddUsernameEvent struct {
+	Username   string
+	ClientItem *ClientItem
+}
+
+type UpdateUsernameEvent struct {
+	Username string
+	ClientID string
+	Location string
+}
+
 // Listens a port for incoming UDP packets.
 func (n *Newton) runUDPServer() {
 	addr := net.UDPAddr{
@@ -89,4 +104,52 @@ func (n *Newton) runTracker() {
 			}
 		}
 	}
+}
+
+// Rename this
+func (n *Newton) routingLoop() {
+	for {
+		select {
+		case event := <-n.RoutingQueue:
+			if event == nil {
+				continue
+			}
+			switch event.(type) {
+			case *AddUsernameEvent:
+				// An event from users
+				n.handleAddUser(event)
+			case *UpdateUsernameEvent:
+				// An event from other newton instances
+				n.handleUpdateUser(event)
+			}
+		}
+	}
+}
+
+func (n *Newton) handleAddUser(event *AddUsernameEvent) {
+	u := (*event).Username
+	r, ok := n.RoutingTable.r[u]
+	if ok {
+		// We need "processed" switch to prevent duplicate items in the query channel.
+		if !r.Processed && len(r.ClientItems) == 0 {
+			continue
+		}
+
+		// We know the location of that user
+		if r.Processed && len(r.ClientItems) != 0 {
+			// Fire a goroutine from here to pass the availability information
+			continue
+		}
+
+		// The item was processed but nothing returned for it.
+		r.Processed = false
+	} else {
+		r = &RouteItem{
+			ExpireAt:    time.Now().Unix() + cstream.RouteItemExpireInterval,
+			Processed:   false,
+			Subscribers: make([]*ClientItem),
+		}
+	}
+	n.RoutingTable.r[u] = r
+	n.TrackUserQueries <- u
 }
