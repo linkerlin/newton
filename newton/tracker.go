@@ -3,6 +3,7 @@ package newton
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/cstream/newton/comm"
@@ -17,10 +18,32 @@ type AddUsernameEvent struct {
 	ClientItem *ClientItem
 }
 
+type OnlineUserEvent struct {
+	Username string
+	Clients  []RouteClientItem
+}
+
 type UpdateUsernameEvent struct {
 	Username string
 	ClientID string
 	Location string
+}
+
+type RouteItem struct {
+	ClientItems []RouteClientItem
+	Subscribers []*ClientItem
+	Processed   bool
+	ExpireAt    int64
+}
+
+type RouteClientItem struct {
+	ClientID string
+	Location string
+}
+
+type RoutingTable struct {
+	sync.RWMutex
+	r map[string]*RouteItem
 }
 
 // Listens a port for incoming UDP packets.
@@ -127,25 +150,35 @@ func (n *Newton) routingLoop() {
 
 func (n *Newton) handleAddUser(event *AddUsernameEvent) {
 	username := (*event).Username
+	c := (*event).ClientItem
 	r, ok := n.RoutingTable.r[username]
 	if ok {
+		// Add this user to the subscribers slice if required.
+		n.addSubscriber(r, c)
+
 		// We need "processed" switch to prevent duplicate items in the query channel.
 		if !r.Processed && len(r.ClientItems) == 0 {
+			// Don't send that request to the queue because it's already inside the queue.
 			return
 		}
 		// We know the location of that user
 		if r.Processed && len(r.ClientItems) != 0 {
-			// Fire a function from here to pass the availability information
-			n.notifyClientItems(r)
-			return
+			// Run a function from here to pass the availability information
+			n.notifyClientItems(username, r)
 		}
-		// The item was processed but nothing returned for it.
+		// At that point, we may have the location information for that user's clients
+		// But we should make a look-up query to update the info or find new clients for
+		// subscribers. So we set 'false' to Processed field of the RoutingItem and
+		// send it to the queue again.
 		r.Processed = false
 	} else {
+		// FIXME: This looks like a piece of shit. Think about linked list or map for this job.
+		var s []*ClientItem
+		s = append(s, (*event).ClientItem)
 		r = &RouteItem{
 			ExpireAt:    time.Now().Unix() + cstream.RouteItemExpireInterval,
 			Processed:   false,
-			Subscribers: make([]*ClientItem, 0), // This is temporary
+			Subscribers: s,
 		}
 	}
 	n.RoutingTable.r[username] = r
@@ -154,6 +187,24 @@ func (n *Newton) handleAddUser(event *AddUsernameEvent) {
 
 func (n *Newton) handleUpdateUser(e *UpdateUsernameEvent) {}
 
-func (n *Newton) notifyClientItems(r *RouteItem) {
+func (n *Newton) notifyClientItems(username string, r *RouteItem) {
+	for _, s := range r.Subscribers {
+		c := OnlineUserEvent{
+			Username: username,
+			Clients:  r.ClientItems,
+		}
+		s.TrackerEvents <- c
+	}
+}
 
+func (n *Newton) addSubscriber(r *RouteItem, c *ClientItem) {
+	existed := false
+	for _, s := range r.Subscribers {
+		if s == c {
+			existed = true
+		}
+	}
+	if existed {
+		r.Subscribers = append(r.Subscribers, c)
+	}
 }

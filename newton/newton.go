@@ -55,7 +55,7 @@ type ClientItem struct {
 	LastAnnounce  int64 //TODO: Rename this.
 	SessionSecret string
 	Conn          *net.Conn
-	ActivityEvent chan string // A channel for receiving events about other user's active sessions.
+	TrackerEvents chan OnlineUserEvent // A channel for receiving events about other user's active sessions.
 }
 
 // InternalConnTable stores opened sockets for other newton instances.
@@ -69,23 +69,6 @@ type ServerItem struct {
 	Conn          *net.Conn
 	Outgoing      chan []byte
 	SessionSecret string
-}
-
-type RouteItem struct {
-	Processed   bool
-	ExpireAt    int64
-	ClientItems []RouteClientItem
-	Subscribers []*ClientItem
-}
-
-type RouteClientItem struct {
-	ClientID string
-	Location string
-}
-
-type RoutingTable struct {
-	sync.RWMutex
-	r map[string]*RouteItem
 }
 
 // New creates a new Newton instance

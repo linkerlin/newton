@@ -49,7 +49,7 @@ func (n *Newton) authenticateConn(salt, password, clientID string, secret []byte
 		LastAnnounce:  now,
 		SessionSecret: sessionSecret.String(),
 		Conn:          conn,
-		ActivityEvent: make(chan string, 10),
+		TrackerEvents: make(chan OnlineUserEvent, 10),
 	}
 
 	// Add a new item to priority queue
