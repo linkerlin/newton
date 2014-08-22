@@ -124,8 +124,8 @@ func New(c *config.Config) *Newton {
 
 	// Tracker queries
 	t := make(chan string, 1000)
-	rt := &RoutingTable{r: make(map[string]*RouteItem)}
 	rq := make(chan TrackerEvent, 100)
+	rt := &RoutingTable{r: make(map[string]*RouteItem)}
 
 	return &Newton{
 		Config:            c,

@@ -103,8 +103,15 @@ func (n *Newton) lookupUser(data map[string]interface{}) ([]byte, error) {
 	if len(usernames) > cstream.MaxUsernameCount {
 		return n.returnError(cstream.LookupUserFailed, cstream.ThresholdExceeded)
 	}
-	// Dont block the request
-	n.manageRoutingTable(usernames)
+
+	clientItem := data["ClientItem"].(*ClientItem)
+	for _, username := range usernames {
+		i := &AddUsernameEvent{
+			Username:   username,
+			ClientItem: clientItem,
+		}
+		n.RoutingQueue <- i
+	}
 
 	msg := &comm.Success{
 		Action: cstream.LookupUserSuccess,

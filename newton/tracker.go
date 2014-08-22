@@ -10,7 +10,6 @@ import (
 )
 
 type TrackerEvent interface {
-	PerformUsername()
 }
 
 type AddUsernameEvent struct {
@@ -117,39 +116,44 @@ func (n *Newton) routingLoop() {
 			switch event.(type) {
 			case *AddUsernameEvent:
 				// An event from users
-				n.handleAddUser(event)
+				n.handleAddUser(event.(*AddUsernameEvent))
 			case *UpdateUsernameEvent:
 				// An event from other newton instances
-				n.handleUpdateUser(event)
+				n.handleUpdateUser(event.(*UpdateUsernameEvent))
 			}
 		}
 	}
 }
 
 func (n *Newton) handleAddUser(event *AddUsernameEvent) {
-	u := (*event).Username
-	r, ok := n.RoutingTable.r[u]
+	username := (*event).Username
+	r, ok := n.RoutingTable.r[username]
 	if ok {
 		// We need "processed" switch to prevent duplicate items in the query channel.
 		if !r.Processed && len(r.ClientItems) == 0 {
-			continue
+			return
 		}
-
 		// We know the location of that user
 		if r.Processed && len(r.ClientItems) != 0 {
-			// Fire a goroutine from here to pass the availability information
-			continue
+			// Fire a function from here to pass the availability information
+			n.notifyClientItems(r)
+			return
 		}
-
 		// The item was processed but nothing returned for it.
 		r.Processed = false
 	} else {
 		r = &RouteItem{
 			ExpireAt:    time.Now().Unix() + cstream.RouteItemExpireInterval,
 			Processed:   false,
-			Subscribers: make([]*ClientItem),
+			Subscribers: make([]*ClientItem, 0), // This is temporary
 		}
 	}
-	n.RoutingTable.r[u] = r
-	n.TrackUserQueries <- u
+	n.RoutingTable.r[username] = r
+	n.TrackUserQueries <- username
+}
+
+func (n *Newton) handleUpdateUser(e *UpdateUsernameEvent) {}
+
+func (n *Newton) notifyClientItems(r *RouteItem) {
+
 }
