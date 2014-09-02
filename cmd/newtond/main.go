@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/cstream/newton/config"
@@ -43,6 +44,11 @@ func main() {
 		fmt.Println(Usage() + "\n")
 		os.Exit(0)
 	}
+
+	// Use all processor cores.
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	// Start a new newton instance
 	var newton = newton.New(config)
 	newton.RunServer()
 }

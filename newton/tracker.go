@@ -119,7 +119,7 @@ func (n *Newton) runTracker() {
 
 		for {
 			select {
-			case t := <-n.TrackUserQueries:
+			case t := <-n.TrackerQueue:
 				for _, ch := range chans {
 					ch <- t
 				}
@@ -182,7 +182,7 @@ func (n *Newton) handleAddUser(event *AddUsernameEvent) {
 		}
 	}
 	n.RoutingTable.r[username] = r
-	n.TrackUserQueries <- username
+	n.TrackerQueue <- username
 }
 
 func (n *Newton) handleUpdateUser(e *UpdateUsernameEvent) {}

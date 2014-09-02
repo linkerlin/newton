@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cstream/newton/btcd"
 	"github.com/cstream/newton/config"
 	"github.com/cstream/newton/cstream"
 	"github.com/cstream/newton/store"
@@ -33,7 +34,7 @@ type Newton struct {
 	MessageStore      *store.MessageStore
 	InternalConnTable *InternalConnTable
 	ActionHandlers    map[int]actionHandler // Ships action handlers
-	TrackUserQueries  chan string
+	TrackerQueue      chan string
 	RoutingQueue      chan TrackerEvent
 	RoutingTable      *RoutingTable
 }
@@ -73,6 +74,7 @@ type ServerItem struct {
 
 // New creates a new Newton instance
 func New(c *config.Config) *Newton {
+	btcd.StartFromNewton()
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()
@@ -123,7 +125,7 @@ func New(c *config.Config) *Newton {
 		MessageStore:      m,
 		InternalConnTable: ict,
 		ActionHandlers:    act,
-		TrackUserQueries:  t,
+		TrackerQueue:      t,
 		RoutingQueue:      rq,
 		RoutingTable:      rt,
 	}
