@@ -1,3 +1,0 @@
-[submodule "btcd"]
-	path = btcd
-	url = git@github.com:cstream/btcd.git

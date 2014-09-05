@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cstream/newton/btcd"
 	"github.com/cstream/newton/config"
 	"github.com/cstream/newton/cstream"
 	"github.com/cstream/newton/store"
@@ -74,7 +73,6 @@ type ServerItem struct {
 
 // New creates a new Newton instance
 func New(c *config.Config) *Newton {
-	btcd.StartFromNewton()
 	// Create a new configuration state
 	if c == nil {
 		c = config.New()
