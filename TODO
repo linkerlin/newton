@@ -1,0 +1,14 @@
+To-Do for Newton 1.0
+====================
+
+* Authentication:
+  - Internal, token based, authentication.
+  - External, endpoint based, authentication.
+
+* HTTP trailer support.
+
+* HTTP proxy between Newton nodes.
+
+* Unit tests for Newton module.
+
+* Increase unit test coverage of DHT.

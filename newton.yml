@@ -1,0 +1,55 @@
+common:
+  debug: true
+  dataDir: /home/burak/newton
+
+newton:
+  address: newton.network:46523
+  listen: 127.0.0.1:46523
+  read_timeout: 60s
+  write_timeout: 60s
+  hash: true
+  autoACK: true
+  certFile: 
+  keyFile:
+  origin:
+  allowedHeaders:
+    - Accept
+    - Accept-Language
+    - Content-Language 
+    - Origin
+    - X-Requested-With
+  allowedMethods:
+    - OPTIONS
+    - GET
+    - POST
+  allowedOrigins:
+  exposedHeaders:
+  maxAge: 600
+  authCallbackUrl:
+  whitelistedHeaders:
+    - Accept
+    - Accept-Encoding
+    - Range
+    - Content-Type
+    - Content-Length
+    - Content-Range
+  dataTransferRate: 10M # 10MB per second
+  dataTransferBurstLimit: 12M # 12MB per second
+
+dht:
+  identifier: 09643df7a07e9a06dacaf6c3e6bbee6b
+  heartbeatInterval: 1000 
+  peerCheckInterval: 2000
+  inactivityThreshold: 4000
+
+multicast:
+  address: 224.0.0.51:9999
+  enabled: true
+  interface: enp2s0
+
+unicast:
+  listen: 0.0.0.0:46523
+  discoveryInterval: 5s
+  peers:
+    - 192.168.2.1:46523
+
