@@ -64,21 +64,27 @@ func (p *Partition) readFromUnicastUDP() {
 			continue
 		}
 
+		addr := sAddr.String()
+		if nr == 0 {
+			if err := p.deleteMember(addr); err != nil {
+				log.Errorf("Error while deleting member %s: %s", addr, err)
+			}
+			continue
+		}
 		var birthdate int64
 		data := buf[:nr]
 		b := bytes.NewBuffer(data)
 		binary.Read(b, binary.LittleEndian, &birthdate)
 
-		addr := sAddr.String()
 		err = p.addMember(addr, birthdate)
 		if err == errMemberAlreadyExist {
 			if uErr := p.updateMember(addr); uErr != nil {
-				log.Errorf("Error while adding peer: %s: %s", addr, err)
+				log.Errorf("Error while adding member: %s: %s", addr, err)
 			}
 			continue
 		}
 		if err != nil {
-			log.Errorf("Error while adding peer: %s: %s", addr, err)
+			log.Errorf("Error while adding member: %s: %s", addr, err)
 		}
 	}
 }

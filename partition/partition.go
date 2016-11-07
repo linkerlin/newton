@@ -98,5 +98,16 @@ func (p *Partition) Run() error {
 }
 
 func (p *Partition) Stop() {
+	// Remove this item from cluster
+	mm := p.getMemberList()
+	var payload []byte
+	for addr, _ := range mm {
+		go func(addr string) {
+			log.Debugf("Sending delete message to %s", addr)
+			if err := p.sendMessage(payload, addr); err != nil {
+				log.Errorf("Error while sending delete message to %s: %s", addr, err)
+			}
+		}(addr)
+	}
 	close(p.done)
 }
