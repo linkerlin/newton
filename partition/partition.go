@@ -94,10 +94,6 @@ func (p *Partition) Run() error {
 	p.waitGroup.Add(1)
 	go p.sortMembersPeriodically()
 
-	// Wait for cluster join
-
-	close(p.StartChan)
-
 	p.serverErrGr.Go(func() error {
 		log.Infof("Listening HTTP/2 connections for partition manager on %s", p.config.Listen)
 		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
@@ -113,8 +109,11 @@ func (p *Partition) Run() error {
 			return err
 		}
 		return nil
-
 	})
+
+	// Wait for cluster join
+
+	close(p.StartChan)
 
 	<-p.done
 
@@ -147,7 +146,7 @@ func (p *Partition) Close() {
 	default:
 	}
 
-	// Remove this item from cluster
+	// Remove this member from cluster
 	mm := p.getMemberList()
 	var payload []byte
 	for addr, _ := range mm {

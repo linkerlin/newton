@@ -147,6 +147,12 @@ func (p *Partition) getMemberList() map[string]int64 {
 	return mm
 }
 
+func (p *Partition) memberCount() int {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+	return len(p.members.m)
+}
+
 func (p *Partition) heartbeatPeriodically(payload []byte) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer p.waitGroup.Done()
