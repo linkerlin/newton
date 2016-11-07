@@ -18,7 +18,7 @@ type udpMessage struct {
 
 // Listens a port for incoming UDP packets.
 func (p *Partition) listenUnicastUDP() error {
-	addr, err := net.ResolveUDPAddr("udp", p.config.Unicast.Listen)
+	addr, err := net.ResolveUDPAddr("udp", p.config.Listen)
 	if err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func (p *Partition) readFromUnicastUDP() {
 	p.serverErrGr.Go(func() error {
 		<-p.closeUDPChan
 
-		log.Info("Stop listening UDP on ", p.config.Unicast.Listen)
+		log.Info("Stop listening UDP on ", p.config.Listen)
 		err := p.unicastSocket.Close()
 		if err != nil {
 			log.Errorf("Error while closing unicast UDP socket: %v", err)
@@ -50,7 +50,7 @@ func (p *Partition) readFromUnicastUDP() {
 		return err
 	})
 
-	log.Info("Listening unicast UDP on ", p.config.Unicast.Listen)
+	log.Info("Listening unicast UDP on ", p.config.Listen)
 	p.startListening()
 	for {
 		buf := make([]byte, maxDatagramSize)
@@ -60,7 +60,7 @@ func (p *Partition) readFromUnicastUDP() {
 				// Gracefuly shutdown
 				break
 			}
-			log.Error("Error while reading packages from UDP ", p.config.Unicast.Listen, ": ", err)
+			log.Error("Error while reading packages from UDP ", p.config.Listen, ": ", err)
 			continue
 		}
 

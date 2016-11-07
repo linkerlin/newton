@@ -9,8 +9,8 @@ newton:
   write_timeout: 60s
   hash: true
   autoACK: true
-  certFile: 
-  keyFile:
+  certFile: /home/burak/server.pem
+  keyFile: /home/burak/server.key
   origin:
   allowedHeaders:
     - Accept
@@ -37,6 +37,7 @@ newton:
   dataTransferBurstLimit: 12M # 12MB per second
 
 dht:
+  listen: 0.0.0.0:46523
   identifier: 09643df7a07e9a06dacaf6c3e6bbee6b
   heartbeatInterval: 1000 
   peerCheckInterval: 2000
@@ -48,7 +49,6 @@ multicast:
   interface: enp2s0
 
 unicast:
-  listen: 0.0.0.0:46523
   discoveryInterval: 5s
   peers:
     - 192.168.2.1:46523

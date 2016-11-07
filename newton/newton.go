@@ -94,7 +94,7 @@ func New(cfg *config.Config) (*Newton, error) {
 		return nil, fmt.Errorf("%s: %s", spth, err)
 	}
 	router := httprouter.New()
-	partman, router, err := partition.New(router, &cfg.DHT)
+	partman, err := partition.New(&cfg.DHT)
 	if err != nil {
 		return nil, err
 	}
@@ -195,10 +195,13 @@ func (n *Newton) Start() error {
 				// redundant Close call.
 				n.Close()
 			}
+			log.Errorf("Error while running HTTP/2 server on %s: %s", n.config.Listen, err)
+			return err
 		}
-		return err
+		return nil
 	})
 
+	// TODO: We have to wait for a potential HTTP server failure
 	<-n.done
 
 	// Wait for workers.
@@ -206,7 +209,7 @@ func (n *Newton) Start() error {
 	log.Info("HTTP server has been stopped.")
 
 	// Stop DHT instance
-	n.partitions.Stop()
+	n.partitions.Close()
 	select {
 	case <-n.partitions.StopChan:
 	case <-time.After(newtonGracePeriod):

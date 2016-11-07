@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	graceful "gopkg.in/tylerb/graceful.v1"
+
+	"golang.org/x/net/http2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/julienschmidt/httprouter"
@@ -17,6 +21,7 @@ import (
 
 type Partition struct {
 	config        *config.DHT
+	httpServer    *graceful.Server
 	birthdate     int64
 	members       *members
 	unicastSocket *net.UDPConn
@@ -27,13 +32,24 @@ type Partition struct {
 	StopChan      chan struct{}
 	listening     chan struct{}
 	closeUDPChan  chan struct{}
-
-	done chan struct{}
+	done          chan struct{}
 }
 
-func New(router *httprouter.Router, c *config.DHT) (*Partition, *httprouter.Router, error) {
+func New(c *config.DHT) (*Partition, error) {
+	router := httprouter.New()
+	s := &http.Server{
+		Addr:    c.Listen,
+		Handler: router,
+	}
+	http2.ConfigureServer(s, nil)
+	srv := &graceful.Server{
+		NoSignalHandling: true,
+		Server:           s,
+	}
+
 	p := &Partition{
 		config:       c,
+		httpServer:   srv,
 		birthdate:    time.Now().UnixNano(),
 		members:      newMembers(),
 		StartChan:    make(chan struct{}),
@@ -42,7 +58,7 @@ func New(router *httprouter.Router, c *config.DHT) (*Partition, *httprouter.Rout
 		closeUDPChan: make(chan struct{}),
 		done:         make(chan struct{}),
 	}
-	return p, router, nil
+	return p, nil
 }
 
 // Run fires up a new partition table.
@@ -82,10 +98,36 @@ func (p *Partition) Run() error {
 
 	close(p.StartChan)
 
+	p.serverErrGr.Go(func() error {
+		log.Infof("Listening HTTP/2 connections for partition manager on %s", p.config.Listen)
+		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
+		if err != nil {
+			if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
+				log.Debugf("Something wrong with HTTP/2 server: %s", err)
+				// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
+				// This block can be invoked during normal closing process but Close method will handle
+				// redundant Close call.
+				p.Close()
+			}
+			log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
+			return err
+		}
+		return nil
+
+	})
+
 	<-p.done
 
 	// Wait until background workers has been closed.
 	p.waitGroup.Wait()
+
+	// Try to close HTTP server
+	stopChan := p.httpServer.StopChan()
+	p.httpServer.Stop(5 * time.Second) // http server
+	select {
+	case <-time.After(6 * time.Second):
+	case <-stopChan:
+	}
 
 	// Now, close UDP server
 	close(p.closeUDPChan)
@@ -97,17 +139,23 @@ func (p *Partition) Run() error {
 	return p.serverErrGr.Wait()
 }
 
-func (p *Partition) Stop() {
+func (p *Partition) Close() {
+	select {
+	case <-p.done:
+		// Already closed
+		return
+	default:
+	}
+
 	// Remove this item from cluster
 	mm := p.getMemberList()
 	var payload []byte
 	for addr, _ := range mm {
-		go func(addr string) {
-			log.Debugf("Sending delete message to %s", addr)
-			if err := p.sendMessage(payload, addr); err != nil {
-				log.Errorf("Error while sending delete message to %s: %s", addr, err)
-			}
-		}(addr)
+		log.Debugf("Sending delete message to %s", addr)
+		if err := p.sendMessage(payload, addr); err != nil {
+			log.Errorf("Error while sending delete message to %s: %s", addr, err)
+		}
 	}
+
 	close(p.done)
 }

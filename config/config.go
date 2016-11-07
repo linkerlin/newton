@@ -57,9 +57,12 @@ type DHT struct {
 	Common
 	Multicast
 	Unicast
+	Listen              string `yaml:"listen"`
 	Identifier          string `yaml:"identifier"`
 	PeerCheckInterval   int64  `yaml:"peerCheckInterval"`
 	InactivityThreshold int64  `yaml:"inactivityThreshold"`
+	CertFile            string `yaml:"certFile"`
+	KeyFile             string `yaml:"keyFile"`
 }
 
 type Multicast struct {
@@ -69,7 +72,6 @@ type Multicast struct {
 }
 
 type Unicast struct {
-	Listen            string   `yaml:"listen"`
 	Peers             []string `yaml:"peers"`
 	DiscoveryInterval string   `yaml:"discoveryInterval"`
 }

@@ -140,7 +140,7 @@ func checkConfig(c *config.Config) error {
 		return errors.New("dataDir cannot be empty.")
 	} else if c.DHT.Multicast.Enabled && c.DHT.Multicast.Address == "" {
 		return errors.New("DHT.Multicast.Address cannot be empty.")
-	} else if !c.DHT.Multicast.Enabled && c.DHT.Unicast.Listen == "" {
+	} else if c.DHT.Listen == "" {
 		return errors.New("DHT.Unicast.Listen cannot be empty.")
 	} else if c.DHT.Identifier == "" {
 		return errors.New("networkIdentifer cannot be empty.")
