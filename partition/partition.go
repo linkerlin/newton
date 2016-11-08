@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 
 	graceful "gopkg.in/tylerb/graceful.v1"
 
@@ -33,6 +35,15 @@ type Partition struct {
 	listening     chan struct{}
 	closeUDPChan  chan struct{}
 	done          chan struct{}
+}
+
+const CLOCK_MONOTONIC_RAW uintptr = 4
+
+func clockMonotonicRaw() int64 {
+	var ts syscall.Timespec
+	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, CLOCK_MONOTONIC_RAW, uintptr(unsafe.Pointer(&ts)), 0)
+	sec, nsec := ts.Unix()
+	return time.Unix(sec, nsec).UnixNano()
 }
 
 func New(c *config.DHT) (*Partition, error) {

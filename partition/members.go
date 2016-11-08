@@ -46,7 +46,7 @@ func (p *Partition) addMember(addr string, birthdate int64) error {
 		return errMemberAlreadyExist
 	}
 
-	now := time.Now().UnixNano()
+	now := clockMonotonicRaw()
 	member := &member{
 		lastActivity: now,
 		birthdate:    birthdate,
@@ -75,7 +75,7 @@ func (p *Partition) checkAliveness(addr string) {
 				continue
 			}
 			m.mu.RLock()
-			dead := m.lastActivity+memberDeadLimit < time.Now().UnixNano()
+			dead := m.lastActivity+memberDeadLimit < clockMonotonicRaw()
 			m.mu.RUnlock()
 
 			if dead {
@@ -117,7 +117,7 @@ func (p *Partition) updateMember(addr string) error {
 		return errMemberNotFound
 	}
 
-	member.lastActivity = time.Now().UnixNano()
+	member.lastActivity = clockMonotonicRaw()
 	p.members.m[addr] = member
 
 	log.Debugf("Member: %s is still alive", addr)
