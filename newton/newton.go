@@ -179,7 +179,7 @@ func (n *Newton) Start() error {
 	case <-n.partitions.StartChan:
 	case <-n.partitions.StopChan:
 		return n.errGroup.Wait()
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		log.Error("Partition manage could not be started. Timeout exceeded.")
 		return errors.New("timeout")
 	}

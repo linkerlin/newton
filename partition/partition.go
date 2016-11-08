@@ -2,6 +2,8 @@ package partition
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"net"
 	"net/http"
@@ -24,6 +26,7 @@ import (
 type Partition struct {
 	config        *config.DHT
 	httpServer    *graceful.Server
+	httpClient    *http.Client
 	birthdate     int64
 	members       *members
 	unicastSocket *net.UDPConn
@@ -47,20 +50,13 @@ func clockMonotonicRaw() int64 {
 }
 
 func New(c *config.DHT) (*Partition, error) {
-	router := httprouter.New()
-	s := &http.Server{
-		Addr:    c.Listen,
-		Handler: router,
-	}
-	http2.ConfigureServer(s, nil)
-	srv := &graceful.Server{
-		NoSignalHandling: true,
-		Server:           s,
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	p := &Partition{
 		config:       c,
-		httpServer:   srv,
+		httpClient:   &http.Client{Transport: tr},
 		birthdate:    time.Now().UnixNano(),
 		members:      newMembers(),
 		StartChan:    make(chan struct{}),
@@ -78,6 +74,37 @@ func (p *Partition) Run() error {
 		log.Info("DHT instance has been closed.")
 		close(p.StopChan)
 	}()
+
+	router := httprouter.New()
+	router.GET("/partitions/set", p.partitionSetHandler)
+	s := &http.Server{
+		Addr:    p.config.Listen,
+		Handler: router,
+	}
+	http2.ConfigureServer(s, nil)
+	p.httpServer = &graceful.Server{
+		NoSignalHandling: true,
+		Server:           s,
+	}
+
+	// TODO: We must close HTTP server if something went wrong in this function.
+	p.serverErrGr.Go(func() error {
+		log.Infof("Listening HTTP/2 connections for partition manager on %s", p.config.Listen)
+		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
+		if err != nil {
+			if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
+				log.Debugf("Something wrong with HTTP/2 server: %s", err)
+				// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
+				// This block can be invoked during normal closing process but Close method will handle
+				// redundant Close call.
+				p.Close()
+			}
+			log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
+			return err
+		}
+		return nil
+	})
+
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
 	}
@@ -105,24 +132,13 @@ func (p *Partition) Run() error {
 	p.waitGroup.Add(1)
 	go p.sortMembersPeriodically()
 
-	p.serverErrGr.Go(func() error {
-		log.Infof("Listening HTTP/2 connections for partition manager on %s", p.config.Listen)
-		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
-		if err != nil {
-			if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
-				log.Debugf("Something wrong with HTTP/2 server: %s", err)
-				// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
-				// This block can be invoked during normal closing process but Close method will handle
-				// redundant Close call.
-				p.Close()
-			}
-			log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
-			return err
-		}
-		return nil
-	})
-
 	// Wait for cluster join
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	p.waitGroup.Add(1)
+	go p.waitForFirstContact(ctx, cancel)
+
+	<-ctx.Done()
+	cancel()
 
 	close(p.StartChan)
 
@@ -168,4 +184,36 @@ func (p *Partition) Close() {
 	}
 
 	close(p.done)
+}
+
+func (p *Partition) waitForFirstContact(ctx context.Context, cancel context.CancelFunc) {
+	defer p.waitGroup.Done()
+	defer cancel()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c := p.memberCount()
+			if c != 0 {
+				master := p.getMasterMember()
+				// Check the master node. If you are the master, form a cluster.
+				if master == becomeLeader {
+					p.waitGroup.Add(1)
+					go p.setupPartitionTable()
+				}
+				log.Infof("Master member is %s", master)
+				return
+			}
+		case <-ctx.Done():
+			log.Info("No member had returned an answer. Forming a cluster with single node.")
+			return
+		}
+	}
+}
+
+func (p *Partition) getMasterMember() string {
+	items := p.sortByAge()
+	return items[0].addr
 }
