@@ -2,14 +2,13 @@ package partition
 
 import (
 	"encoding/binary"
-	"math/rand"
+	"fmt"
 	"sync"
 
 	"github.com/purak/newton/log"
 )
 
 const partitionCount int32 = 523
-const replicationFactor int32 = 2
 
 type partitionTable struct {
 	mu sync.RWMutex
@@ -50,20 +49,100 @@ func (p *Partition) setupPartitionTable() {
 
 	mm := p.getMemberList()
 	mm[p.config.Listen] = 0
-	count := partitionCount * replicationFactor
-	memberCount := len(mm)
-	c := count / memberCount
-	leap := count % memberCount
+	mm["1.1.1.1:2312"] = 0
+	mm["2.2.2.2:2312"] = 0
+	mm["3.3.3.3:2312"] = 0
+	/*mm["4.4.4.4:2312"] = 0
+	mm["5.5.5.5:2312"] = 0
+	mm["6.6.6.6:2312"] = 0
+	mm["7.7.7.7:2312"] = 0
+	mm["8.8.8.8:2312"] = 0
+	mm["9.9.9.9:2312"] = 0
+	mm["10.10.10.10:2312"] = 0*/
 
+	memberCount := int32(len(mm))
+	var countPerMember, leap int32
+	if partitionCount >= memberCount {
+		countPerMember = 2 * (partitionCount / memberCount)
+		leap = 2 * (partitionCount % memberCount)
+	} else {
+		countPerMember = 1
+		leap = memberCount % partitionCount
+	}
+	distribution := make(map[string]int32)
 	for address, _ := range mm {
-		var i int32
-		for i = 0; i < c; i++ {
-			partID := rand.Intn(partitionCount)
+		distribution[address] = countPerMember
+	}
+
+	fmt.Println(leap)
+	var c int32 = 0
+	if leap != 0 {
+		for address, count := range distribution {
+			c++
+			distribution[address] = count + 1
+			if c >= leap {
+				break
+			}
+		}
+	}
+
+	replicationFactor := 2
+	/*
+		for address, count := range distribution {
+			for count > 0 {
+				partID := rand.Int31n(partitionCount)
+				items := p.table.p[partID]
+				if _, ok := items[address]; ok {
+					continue
+				}
+				items[address] = struct{}{}
+				p.table.p[partID] = items
+				count--
+			}
+		}*/
+
+	for partID, items := range p.table.p {
+		i := 0
+		for address, count := range distribution {
+			if count <= 0 {
+				continue
+			}
+			if i >= replicationFactor {
+				break
+			}
+			if _, ok := items[address]; ok {
+				continue
+			}
+			items[address] = struct{}{}
+			p.table.p[partID] = items
+			count--
+			distribution[address] = count
+			i++
+			if len(items) < replicationFactor {
+				continue
+			}
+			break
+		}
+	}
+	fmt.Println(p.table.p)
+
+	hede := make(map[string]int)
+	for partID, items := range p.table.p {
+		if len(items) != 2 {
+			fmt.Println("item count for part ", partID, " is", len(items))
+		}
+		for address, _ := range items {
+			c, ok := hede[address]
+			if ok {
+				c++
+				hede[address] = c
+			} else {
+				hede[address] = 1
+			}
 
 		}
-
-		items := p.table.p[partID]
-		items[address] = struct{}{}
-		p.table.p[partID] = items
 	}
+	fmt.Println(countPerMember)
+	fmt.Println(hede)
+
 }
