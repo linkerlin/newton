@@ -33,6 +33,7 @@ type Partition struct {
 	serverErrGr   errgroup.Group
 	requestWG     sync.WaitGroup
 	waitGroup     sync.WaitGroup
+	table         *partitionTable
 	StartChan     chan struct{}
 	StopChan      chan struct{}
 	listening     chan struct{}
@@ -53,12 +54,16 @@ func New(c *config.DHT) (*Partition, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	table := &partitionTable{
+		p: make(map[int32]map[string]struct{}),
+	}
 
 	p := &Partition{
 		config:       c,
 		httpClient:   &http.Client{Transport: tr},
 		birthdate:    time.Now().UnixNano(),
 		members:      newMembers(),
+		table:        table,
 		StartChan:    make(chan struct{}),
 		StopChan:     make(chan struct{}),
 		listening:    make(chan struct{}),
@@ -133,12 +138,14 @@ func (p *Partition) Run() error {
 	go p.sortMembersPeriodically()
 
 	// Wait for cluster join
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	p.waitGroup.Add(1)
-	go p.waitForFirstContact(ctx, cancel)
+	go p.waitForConsensus(ctx)
 
 	<-ctx.Done()
 	cancel()
+
+	// Wait for forming a cluster
 
 	close(p.StartChan)
 
@@ -186,31 +193,23 @@ func (p *Partition) Close() {
 	close(p.done)
 }
 
-func (p *Partition) waitForFirstContact(ctx context.Context, cancel context.CancelFunc) {
+func (p *Partition) waitForConsensus(ctx context.Context) {
 	defer p.waitGroup.Done()
-	defer cancel()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			c := p.memberCount()
-			if c != 0 {
-				master := p.getMasterMember()
-				// Check the master node. If you are the master, form a cluster.
-				if master == becomeLeader {
-					p.waitGroup.Add(1)
-					go p.setupPartitionTable()
-				}
-				log.Infof("Master member is %s", master)
-				return
-			}
-		case <-ctx.Done():
-			log.Info("No member had returned an answer. Forming a cluster with single node.")
+	<-ctx.Done()
+	c := p.memberCount()
+	master := p.config.Listen
+	if c != 0 {
+		master = p.getMasterMember()
+		log.Infof("Master member is %s", master)
+		// Check the master node. If you are the master, form a cluster.
+		if master != p.config.Listen {
 			return
 		}
 	}
+
+	p.waitGroup.Add(1)
+	go p.setupPartitionTable()
+	return
 }
 
 func (p *Partition) getMasterMember() string {

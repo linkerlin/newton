@@ -75,7 +75,7 @@ func (c *clientStore) AddClient(userHash string, conn *connection) (uint32, erro
 		}
 		if len(i) != 0 {
 			buf := bytes.NewReader(i)
-			err := binary.Read(buf, binary.BigEndian, &c.head)
+			err := binary.Read(buf, binary.LittleEndian, &c.head)
 			if err != nil {
 				return 0, err
 			}
@@ -87,7 +87,7 @@ func (c *clientStore) AddClient(userHash string, conn *connection) (uint32, erro
 	// for readability
 	clientID := c.head
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, clientID)
+	err := binary.Write(buf, binary.LittleEndian, clientID)
 	if err != nil {
 		return 0, err
 	}

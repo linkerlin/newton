@@ -23,8 +23,7 @@ type members struct {
 }
 
 var (
-	becomeLeader    string = "me"
-	memberDeadLimit int64  = 1000000000 // 1 second in nanoseconds
+	memberDeadLimit int64 = 1000000000 // 1 second in nanoseconds
 )
 
 var (
@@ -53,6 +52,16 @@ func (p *Partition) addMember(addr string, birthdate int64) error {
 	}
 	p.members.m[addr] = member
 	p.waitGroup.Add(1)
+
+	partID := findPartitionID(addr)
+	p.table.mu.Lock()
+	items := p.table.p[partID]
+	if _, ok := items[addr]; !ok {
+		items[addr] = struct{}{}
+		p.table.p[partID] = items
+	}
+	p.table.mu.Unlock()
+
 	go p.checkAliveness(addr)
 	log.Infof("New member has been added: %s", addr)
 	return nil
@@ -132,6 +141,16 @@ func (p *Partition) deleteMember(addr string) error {
 		return errMemberNotFound
 	}
 	delete(p.members.m, addr)
+
+	partID := findPartitionID(addr)
+	p.table.mu.Lock()
+	items := p.table.p[partID]
+	if _, ok := items[addr]; ok {
+		delete(items, addr)
+		p.table.p[partID] = items
+	}
+	p.table.mu.Unlock()
+
 	log.Infof("Member has been deleted: %s", addr)
 	return nil
 }
@@ -197,7 +216,7 @@ func (p *Partition) sortByAge() []memberSort {
 	items := []memberSort{}
 	mm := p.getMemberList()
 	// Add itself
-	mm[becomeLeader] = p.birthdate
+	mm[p.config.Listen] = p.birthdate
 	for addr, birthdate := range mm {
 		item := memberSort{
 			addr:      addr,
@@ -221,7 +240,7 @@ func (p *Partition) sortMembersPeriodically() {
 			items := p.sortByAge()
 			item := items[0]
 			log.Debugf("Current cluster leader is %s", item.addr)
-			if item.addr == becomeLeader {
+			if item.addr == p.config.Listen {
 				// Take the leadership
 			} else {
 			}
