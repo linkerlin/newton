@@ -57,6 +57,7 @@ type DHT struct {
 	Common
 	Multicast
 	Unicast
+	Address             string `yaml:"address"`
 	Listen              string `yaml:"listen"`
 	Identifier          string `yaml:"identifier"`
 	PeerCheckInterval   int64  `yaml:"peerCheckInterval"`

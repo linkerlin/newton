@@ -52,16 +52,6 @@ func (p *Partition) addMember(addr string, birthdate int64) error {
 	}
 	p.members.m[addr] = member
 	p.waitGroup.Add(1)
-
-	partID := findPartitionID(addr)
-	p.table.mu.Lock()
-	items := p.table.p[partID]
-	if _, ok := items[addr]; !ok {
-		items[addr] = struct{}{}
-		p.table.p[partID] = items
-	}
-	p.table.mu.Unlock()
-
 	go p.checkAliveness(addr)
 	log.Infof("New member has been added: %s", addr)
 	return nil
@@ -141,16 +131,6 @@ func (p *Partition) deleteMember(addr string) error {
 		return errMemberNotFound
 	}
 	delete(p.members.m, addr)
-
-	partID := findPartitionID(addr)
-	p.table.mu.Lock()
-	items := p.table.p[partID]
-	if _, ok := items[addr]; ok {
-		delete(items, addr)
-		p.table.p[partID] = items
-	}
-	p.table.mu.Unlock()
-
 	log.Infof("Member has been deleted: %s", addr)
 	return nil
 }
@@ -212,7 +192,7 @@ func (a ByAge) Len() int           { return len(a) }
 func (a ByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByAge) Less(i, j int) bool { return a[i].birthdate < a[j].birthdate }
 
-func (p *Partition) sortByAge() []memberSort {
+func (p *Partition) sortMembersByAge() []memberSort {
 	items := []memberSort{}
 	mm := p.getMemberList()
 	// Add itself
@@ -237,7 +217,7 @@ func (p *Partition) sortMembersPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			items := p.sortByAge()
+			items := p.sortMembersByAge()
 			item := items[0]
 			log.Debugf("Current cluster leader is %s", item.addr)
 			if item.addr == p.config.Listen {

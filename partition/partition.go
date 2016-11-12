@@ -55,7 +55,9 @@ func New(c *config.DHT) (*Partition, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	table := &partitionTable{
-		p: make(map[int32]map[string]struct{}),
+		partition: make(map[int]string),
+		members:   make(map[string][]int),
+		sorted:    []memberSort{},
 	}
 
 	p := &Partition{
@@ -122,6 +124,8 @@ func (p *Partition) Run() error {
 		return err
 	}
 	payload := buf.Bytes()
+	src := []byte(p.config.Address)
+	payload = append(payload, src...)
 	log.Info("Trying to join the cluster")
 	for _, addr := range p.config.Unicast.Peers {
 		addr = strings.Trim(addr, " ")
@@ -213,6 +217,6 @@ func (p *Partition) waitForConsensus(ctx context.Context) {
 }
 
 func (p *Partition) getMasterMember() string {
-	items := p.sortByAge()
+	items := p.sortMembersByAge()
 	return items[0].addr
 }

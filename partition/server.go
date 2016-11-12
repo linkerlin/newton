@@ -64,27 +64,28 @@ func (p *Partition) readFromUnicastUDP() {
 			continue
 		}
 
-		addr := sAddr.String()
+		ip := sAddr.String()
 		if nr == 0 {
-			if err := p.deleteMember(addr); err != nil {
-				log.Errorf("Error while deleting member %s: %s", addr, err)
-			}
+			log.Errorf("Empty package has been received from IP: %s", ip)
 			continue
 		}
+
 		var birthdate int64
 		data := buf[:nr]
-		b := bytes.NewBuffer(data)
+		b := bytes.NewBuffer(data[:8])
 		binary.Read(b, binary.LittleEndian, &birthdate)
+		addr := string(data[8:])
 
+		log.Debugf("Heartbeat received from IP: %s, address: %s", ip, addr)
 		err = p.addMember(addr, birthdate)
 		if err == errMemberAlreadyExist {
 			if uErr := p.updateMember(addr); uErr != nil {
-				log.Errorf("Error while adding member: %s: %s", addr, err)
+				log.Errorf("Error while adding member IP: %s, address: %s: %s", ip, addr, err)
 			}
 			continue
 		}
 		if err != nil {
-			log.Errorf("Error while adding member: %s: %s", addr, err)
+			log.Errorf("Error while adding member IP: %s, address: %s: %s", addr, err)
 		}
 	}
 }
