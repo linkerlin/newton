@@ -24,21 +24,22 @@ import (
 )
 
 type Partition struct {
-	config        *config.DHT
-	httpServer    *graceful.Server
-	httpClient    *http.Client
-	birthdate     int64
-	members       *members
-	unicastSocket *net.UDPConn
-	serverErrGr   errgroup.Group
-	requestWG     sync.WaitGroup
-	waitGroup     sync.WaitGroup
-	table         *partitionTable
-	StartChan     chan struct{}
-	StopChan      chan struct{}
-	listening     chan struct{}
-	closeUDPChan  chan struct{}
-	done          chan struct{}
+	config          *config.DHT
+	httpServer      *graceful.Server
+	httpClient      *http.Client
+	birthdate       int64
+	members         *members
+	unicastSocket   *net.UDPConn
+	serverErrGr     errgroup.Group
+	requestWG       sync.WaitGroup
+	waitGroup       sync.WaitGroup
+	table           *partitionTable
+	StartChan       chan struct{}
+	StopChan        chan struct{}
+	listening       chan struct{}
+	closeUDPChan    chan struct{}
+	nodeInitialized chan struct{}
+	done            chan struct{}
 }
 
 const CLOCK_MONOTONIC_RAW uintptr = 4
@@ -55,22 +56,23 @@ func New(c *config.DHT) (*Partition, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	table := &partitionTable{
-		partition: make(map[int]string),
-		members:   make(map[string][]int),
-		sorted:    []memberSort{},
+		Partition: make(map[int]string),
+		Members:   make(map[string][]int),
+		Sorted:    []memberSort{},
 	}
 
 	p := &Partition{
-		config:       c,
-		httpClient:   &http.Client{Transport: tr},
-		birthdate:    time.Now().UnixNano(),
-		members:      newMembers(),
-		table:        table,
-		StartChan:    make(chan struct{}),
-		StopChan:     make(chan struct{}),
-		listening:    make(chan struct{}),
-		closeUDPChan: make(chan struct{}),
-		done:         make(chan struct{}),
+		config:          c,
+		httpClient:      &http.Client{Transport: tr},
+		birthdate:       time.Now().UnixNano(),
+		members:         newMembers(),
+		table:           table,
+		StartChan:       make(chan struct{}),
+		StopChan:        make(chan struct{}),
+		listening:       make(chan struct{}),
+		closeUDPChan:    make(chan struct{}),
+		nodeInitialized: make(chan struct{}),
+		done:            make(chan struct{}),
 	}
 	return p, nil
 }
@@ -83,7 +85,7 @@ func (p *Partition) Run() error {
 	}()
 
 	router := httprouter.New()
-	router.GET("/partitions/set", p.partitionSetHandler)
+	router.POST("/partition-table/set", p.partitionSetHandler)
 	s := &http.Server{
 		Addr:    p.config.Listen,
 		Handler: router,
@@ -112,6 +114,8 @@ func (p *Partition) Run() error {
 		return nil
 	})
 
+	// TODO: Implement an event mechanisim to run after HTTP server
+	time.Sleep(200 * time.Millisecond)
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
 	}
@@ -138,18 +142,13 @@ func (p *Partition) Run() error {
 	p.waitGroup.Add(1)
 	go p.heartbeatPeriodically(payload)
 
-	p.waitGroup.Add(1)
-	go p.sortMembersPeriodically()
-
 	// Wait for cluster join
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	p.waitGroup.Add(1)
 	go p.waitForConsensus(ctx)
 
-	<-ctx.Done()
+	<-p.nodeInitialized
 	cancel()
-
-	// Wait for forming a cluster
 
 	close(p.StartChan)
 
@@ -160,9 +159,9 @@ func (p *Partition) Run() error {
 
 	// Try to close HTTP server
 	stopChan := p.httpServer.StopChan()
-	p.httpServer.Stop(5 * time.Second) // http server
+	p.httpServer.Stop(1 * time.Second) // http server
 	select {
-	case <-time.After(6 * time.Second):
+	case <-time.After(2 * time.Second):
 	case <-stopChan:
 	}
 
@@ -184,39 +183,34 @@ func (p *Partition) Close() {
 	default:
 	}
 
-	// Remove this member from cluster
-	mm := p.getMemberList()
-	var payload []byte
-	for addr, _ := range mm {
-		log.Debugf("Sending delete message to %s", addr)
-		if err := p.sendMessage(payload, addr); err != nil {
-			log.Errorf("Error while sending delete message to %s: %s", addr, err)
-		}
-	}
-
 	close(p.done)
 }
 
 func (p *Partition) waitForConsensus(ctx context.Context) {
 	defer p.waitGroup.Done()
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-p.nodeInitialized:
+		log.Debugf("Cluster formed by someone else.")
+		return
+	}
+
 	c := p.memberCount()
-	master := p.config.Listen
+	master := p.config.Address
 	if c != 0 {
 		master = p.getMasterMember()
 		log.Infof("Master member is %s", master)
 		// Check the master node. If you are the master, form a cluster.
-		if master != p.config.Listen {
+		if master != p.config.Address {
 			return
 		}
 	}
-
 	p.waitGroup.Add(1)
-	go p.setupPartitionTable()
+	go p.createPartitionTable()
 	return
 }
 
 func (p *Partition) getMasterMember() string {
 	items := p.sortMembersByAge()
-	return items[0].addr
+	return items[0].Addr
 }

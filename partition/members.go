@@ -182,50 +182,29 @@ func (p *Partition) heartbeatPeriodically(payload []byte) {
 }
 
 type memberSort struct {
-	addr      string
-	birthdate int64
+	Addr      string
+	Birthdate int64
 }
 
 type ByAge []memberSort
 
 func (a ByAge) Len() int           { return len(a) }
 func (a ByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByAge) Less(i, j int) bool { return a[i].birthdate < a[j].birthdate }
+func (a ByAge) Less(i, j int) bool { return a[i].Birthdate < a[j].Birthdate }
 
 func (p *Partition) sortMembersByAge() []memberSort {
 	items := []memberSort{}
 	mm := p.getMemberList()
 	// Add itself
-	mm[p.config.Listen] = p.birthdate
+	mm[p.config.Address] = p.birthdate
 	for addr, birthdate := range mm {
 		item := memberSort{
-			addr:      addr,
-			birthdate: birthdate,
+			Addr:      addr,
+			Birthdate: birthdate,
 		}
 		items = append(items, item)
 	}
 	sort.Sort(ByAge(items))
 	return items
 
-}
-
-func (p *Partition) sortMembersPeriodically() {
-	ticker := time.NewTicker(time.Second)
-	defer p.waitGroup.Done()
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			items := p.sortMembersByAge()
-			item := items[0]
-			log.Debugf("Current cluster leader is %s", item.addr)
-			if item.addr == p.config.Listen {
-				// Take the leadership
-			} else {
-			}
-		case <-p.done:
-			return
-		}
-	}
 }

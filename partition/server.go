@@ -70,6 +70,11 @@ func (p *Partition) readFromUnicastUDP() {
 			continue
 		}
 
+		if nr <= 8 {
+			log.Errorf("Heartbeat package is too small. IP: %s", ip)
+			continue
+		}
+
 		var birthdate int64
 		data := buf[:nr]
 		b := bytes.NewBuffer(data[:8])
@@ -86,6 +91,16 @@ func (p *Partition) readFromUnicastUDP() {
 		}
 		if err != nil {
 			log.Errorf("Error while adding member IP: %s, address: %s: %s", addr, err)
+		}
+
+		select {
+		case <-p.nodeInitialized:
+			mAddr := p.getMasterMember()
+			if mAddr == p.config.Address {
+				p.waitGroup.Add(1)
+				go p.joinCluster(addr)
+			}
+		default:
 		}
 	}
 }

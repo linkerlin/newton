@@ -1,9 +1,9 @@
 package partition
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -16,12 +16,23 @@ type ErrorMsg struct {
 }
 
 func (p *Partition) partitionSetHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	b, err := ioutil.ReadAll(r.Body)
+	dec := gob.NewDecoder(r.Body) // Will read from network.
+	var table partitionTable
+	err := dec.Decode(&table)
 	if err != nil {
-		p.jsonErrorResponse(w, fmt.Sprintf("Error while reading request body: %s", err), http.StatusInternalServerError)
+		p.jsonErrorResponse(w, fmt.Sprintf("Error while setting partition table: %s", err), http.StatusInternalServerError)
+		return
 	}
-
-	fmt.Println(string(b))
+	partitionTableLock.Lock()
+	p.table = &table
+	partitionTableLock.Unlock()
+	log.Infof("Received partition table from the oldest node.")
+	select {
+	case <-p.nodeInitialized:
+		return
+	default:
+	}
+	close(p.nodeInitialized)
 }
 
 // jsonErrorResponse prepares a json response with the given description and  status code variables then returns the response.
