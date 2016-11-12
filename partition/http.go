@@ -10,6 +10,10 @@ import (
 	"github.com/purak/newton/log"
 )
 
+func (p *Partition) alivenessHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Dummy handler. Just returns 200 OK
+}
+
 // ErrorMsg represents an error message
 type ErrorMsg struct {
 	Description string `json:"description"`

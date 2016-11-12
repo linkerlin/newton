@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"syscall"
@@ -85,6 +86,8 @@ func (p *Partition) Run() error {
 	}()
 
 	router := httprouter.New()
+
+	router.HEAD("/test-aliveness", p.alivenessHandler)
 	router.POST("/partition-table/set", p.partitionSetHandler)
 	s := &http.Server{
 		Addr:    p.config.Listen,
@@ -96,9 +99,36 @@ func (p *Partition) Run() error {
 		Server:           s,
 	}
 
+	httpStarted := make(chan struct{})
+	checkHTTPAliveness := func() {
+		dst := url.URL{
+			Scheme: "https",
+			Host:   p.config.Listen,
+			Path:   "/test-aliveness",
+		}
+		for {
+			<-time.After(50 * time.Millisecond)
+			req, err := http.NewRequest("HEAD", dst.String(), nil)
+			if err != nil {
+				log.Errorf("Error while creating new request: ", err)
+				continue
+			}
+			res, err := p.httpClient.Do(req)
+			if err != nil {
+				// Probably "connection refused"
+				log.Debugf("Error while checking aliveness: %s", err)
+			}
+			if res.StatusCode == http.StatusOK {
+				close(httpStarted)
+				return
+			}
+		}
+	}
+
 	// TODO: We must close HTTP server if something went wrong in this function.
 	p.serverErrGr.Go(func() error {
-		log.Infof("Listening HTTP/2 connections for partition manager on %s", p.config.Listen)
+		log.Infof("Partition manager listens %s", p.config.Listen)
+		go checkHTTPAliveness()
 		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
@@ -114,8 +144,9 @@ func (p *Partition) Run() error {
 		return nil
 	})
 
-	// TODO: Implement an event mechanisim to run after HTTP server
-	time.Sleep(200 * time.Millisecond)
+	// TODO: We may need to set a timer and return about an error about timeout?
+	<-httpStarted
+
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
 	}
