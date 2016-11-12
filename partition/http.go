@@ -10,8 +10,21 @@ import (
 	"github.com/purak/newton/log"
 )
 
+type AlivenessMsg struct {
+	Birthdate int64 `json:"birthdate"`
+}
+
 func (p *Partition) alivenessHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Dummy handler. Just returns 200 OK
+	if r.Method == http.MethodHead {
+		// Internal aliveness check
+		return
+	}
+	msg := &AlivenessMsg{
+		Birthdate: p.birthdate,
+	}
+	if err := json.NewEncoder(w).Encode(msg); err != nil {
+		p.jsonErrorResponse(w, fmt.Sprintf("Error while returning birthdate: %s", err), http.StatusInternalServerError)
+	}
 }
 
 // ErrorMsg represents an error message
@@ -29,8 +42,8 @@ func (p *Partition) partitionSetHandler(w http.ResponseWriter, r *http.Request, 
 	}
 	partitionTableLock.Lock()
 	p.table = &table
+	log.Infof("Received partition table from coordinator node: %s", p.table.Sorted[0].Addr)
 	partitionTableLock.Unlock()
-	log.Infof("Received partition table from the oldest node.")
 	select {
 	case <-p.nodeInitialized:
 		return

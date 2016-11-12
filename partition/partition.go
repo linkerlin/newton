@@ -87,7 +87,8 @@ func (p *Partition) Run() error {
 
 	router := httprouter.New()
 
-	router.HEAD("/test-aliveness", p.alivenessHandler)
+	router.HEAD("/aliveness", p.alivenessHandler)
+	router.GET("/aliveness", p.alivenessHandler)
 	router.POST("/partition-table/set", p.partitionSetHandler)
 	s := &http.Server{
 		Addr:    p.config.Listen,
@@ -104,7 +105,7 @@ func (p *Partition) Run() error {
 		dst := url.URL{
 			Scheme: "https",
 			Host:   p.config.Listen,
-			Path:   "/test-aliveness",
+			Path:   "/aliveness",
 		}
 		for {
 			<-time.After(50 * time.Millisecond)
@@ -172,6 +173,9 @@ func (p *Partition) Run() error {
 
 	p.waitGroup.Add(1)
 	go p.heartbeatPeriodically(payload)
+
+	p.waitGroup.Add(1)
+	go p.splitBrainDetection()
 
 	// Wait for cluster join
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)

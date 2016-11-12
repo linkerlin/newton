@@ -95,16 +95,28 @@ func (p *Partition) readFromUnicastUDP() {
 
 		select {
 		case <-p.nodeInitialized:
-			mAddr := p.getMasterMember()
-			if mAddr == p.config.Address {
-				p.waitGroup.Add(1)
-				go p.joinCluster(addr)
-			}
+			p.waitGroup.Add(1)
+			go p.backgroundJoin(addr)
 		default:
 		}
 	}
 }
 
+func (p *Partition) backgroundJoin(addr string) {
+	defer p.waitGroup.Done()
+
+	mAddr := p.getMasterMemberFromPartitionTable()
+	if mAddr != p.config.Address {
+		// You're not the master node.
+		return
+	}
+	if err := p.joinCluster(addr); err != nil {
+		// TODO: We should re-try this.
+		log.Errorf("Error while adding a new member to cluster: %s", err)
+		return
+	}
+
+}
 func (p *Partition) sendMessage(data []byte, addr string) error {
 	uaddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {

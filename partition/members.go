@@ -1,7 +1,11 @@
 package partition
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -207,4 +211,96 @@ func (p *Partition) sortMembersByAge() []memberSort {
 	sort.Sort(ByAge(items))
 	return items
 
+}
+
+func (p *Partition) splitBrainDetection() {
+	ticker := time.NewTicker(time.Second)
+	defer p.waitGroup.Done()
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			realMaster := p.getMasterMemberFromPartitionTable()
+			if len(realMaster) == 0 {
+				continue
+			}
+			addr := p.getMasterMember()
+			if addr != realMaster {
+				log.Warnf("Contradiction between partition table and discovery subsystem. Old master: %s, new master: %s", realMaster, addr)
+				if p.config.Address == addr {
+					p.waitGroup.Add(1)
+					go p.takeOverCluster(realMaster)
+				}
+				continue
+			}
+			log.Debugf("Current cluster leader is %s", realMaster)
+		case <-p.done:
+			return
+		}
+	}
+}
+
+func (p *Partition) takeOverCluster(oldMasterAddr string) {
+	defer p.waitGroup.Done()
+
+	// Try to reach out the old master
+	bd, err := p.checkOldMaster(oldMasterAddr)
+	if err != nil {
+		// It should be offline currently or deals with an internal error.
+		log.Errorf("Error while checking aliveness of the old master node: %s", err)
+	} else {
+		partitionTableLock.RLock()
+		if len(p.table.Sorted) == 0 {
+			// TODO: It should be impossible. Deal with this.
+			log.Errorf("No member found in partition table")
+			return
+		}
+		birthdate := p.table.Sorted[0].Birthdate
+		partitionTableLock.RUnlock()
+		// Restarted. Take over the cluster
+		if birthdate == bd {
+			// TODO: Possible split brain. Deal with this.
+			return
+		}
+	}
+
+	// You are the new master. Set a new partition table.
+
+	partitionTableLock.Lock()
+	p.table.Sorted = p.sortMembersByAge()
+	partitionTableLock.Unlock()
+
+	log.Infof("Taking over coordination role.")
+	// TODO: re-try this in error condition
+	if err := p.pushPartitionTable(); err != nil {
+		log.Errorf("Error while pushing partition table.")
+	}
+}
+
+func (p *Partition) checkOldMaster(oldMasterAddr string) (int64, error) {
+	dst := url.URL{
+		Scheme: "https",
+		Host:   oldMasterAddr,
+		Path:   "/aliveness",
+	}
+	req, err := http.NewRequest("GET", dst.String(), nil)
+	if err != nil {
+		return 0, err
+	}
+	// TODO: add timeout
+	res, err := p.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("Old master returned HTTP %d", res.StatusCode)
+	}
+	msg := &AlivenessMsg{}
+
+	if err := json.NewDecoder(res.Body).Decode(msg); err != nil {
+		return 0, err
+	}
+	return msg.Birthdate, nil
 }

@@ -71,8 +71,12 @@ func (p *Partition) pushPartitionTable() error {
 	}
 	serialized := network.Bytes()
 	var g errgroup.Group
-	for _, item := range p.table.Sorted[1:] {
+	for _, item := range p.table.Sorted {
 		addr := item.Addr
+		if addr == p.config.Address {
+			// Dont send that message yourself.
+			continue
+		}
 		g.Go(func() error {
 			return p.setPartitionTable(addr, serialized)
 		})
@@ -106,17 +110,22 @@ func (p *Partition) setPartitionTable(addr string, serialized []byte) error {
 	return nil
 }
 
-func (p *Partition) joinCluster(addr string) {
-	defer p.waitGroup.Done()
-
+func (p *Partition) joinCluster(addr string) error {
 	partitionTableLock.Lock()
 	defer partitionTableLock.Unlock()
 
 	log.Infof("Joining a new member to cluster: %s", addr)
 	sorted := p.sortMembersByAge()
 	p.table.Sorted = sorted
-	if err := p.pushPartitionTable(); err != nil {
-		log.Errorf("Error while adding a new member to cluster: %s", err)
-	}
+	return p.pushPartitionTable()
+}
 
+func (p *Partition) getMasterMemberFromPartitionTable() string {
+	partitionTableLock.RLock()
+	defer partitionTableLock.RUnlock()
+	if len(p.table.Sorted) == 0 {
+		log.Debugf("No member found in partition table.")
+		return ""
+	}
+	return p.table.Sorted[0].Addr
 }
