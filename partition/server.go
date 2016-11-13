@@ -70,35 +70,53 @@ func (p *Partition) readFromUnicastUDP() {
 			continue
 		}
 
-		if nr <= 8 {
-			log.Errorf("Heartbeat package is too small. IP: %s", ip)
-			continue
-		}
-
-		var birthdate int64
 		data := buf[:nr]
-		b := bytes.NewBuffer(data[:8])
-		binary.Read(b, binary.LittleEndian, &birthdate)
-		addr := string(data[8:])
-
-		log.Debugf("Heartbeat received from IP: %s, address: %s", ip, addr)
-		err = p.addMember(addr, birthdate)
-		if err == errMemberAlreadyExist {
-			if uErr := p.updateMember(addr); uErr != nil {
-				log.Errorf("Error while adding member IP: %s, address: %s: %s", ip, addr, err)
-			}
-			continue
-		}
-		if err != nil {
-			log.Errorf("Error while adding member IP: %s, address: %s: %s", addr, err)
-		}
-
-		select {
-		case <-p.nodeInitialized:
+		if data[0] == heartbeatMessageFlag {
 			p.waitGroup.Add(1)
-			go p.backgroundJoin(addr)
-		default:
+			go p.processHeartbeat(ip)
+		} else if data[0] == joinMessageFlag {
+			p.waitGroup.Add(1)
+			go p.processJoin(data, ip)
 		}
+	}
+}
+
+func (p *Partition) processJoin(data []byte, ip string) {
+	defer p.waitGroup.Done()
+	var birthdate int64
+
+	b := bytes.NewBuffer(data[1:9])
+	binary.Read(b, binary.LittleEndian, &birthdate)
+	addr := string(data[9:])
+
+	log.Infof("Join message received from IP: %s, address: %s", ip, addr)
+	err := p.addMember(addr, ip, birthdate)
+	if err == errMemberAlreadyExist {
+		if uErr := p.updateMember(addr); uErr != nil {
+			log.Errorf("Error while adding member IP: %s, address: %s: %s", ip, addr, err)
+		}
+		return
+	}
+	if err != nil {
+		log.Errorf("Error while adding member IP: %s, address: %s: %s", addr, err)
+	}
+	select {
+	case <-p.nodeInitialized:
+		p.waitGroup.Add(1)
+		go p.backgroundJoin(addr)
+	default:
+	}
+}
+
+func (p *Partition) processHeartbeat(ip string) {
+	defer p.waitGroup.Done()
+	select {
+	case <-p.nodeInitialized:
+		log.Debugf("Heartbeat message received from %s", ip)
+		if uErr := p.updateMemberByIP(ip); uErr != nil {
+			log.Errorf("Error while processing heartbeat from %s: %s", ip, uErr)
+		}
+	default:
 	}
 }
 

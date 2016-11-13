@@ -156,26 +156,21 @@ func (p *Partition) Run() error {
 	<-p.listening
 
 	buf := new(bytes.Buffer)
+	if err := buf.WriteByte(joinMessageFlag); err != nil {
+		return err
+	}
 	if err := binary.Write(buf, binary.LittleEndian, p.birthdate); err != nil {
 		return err
 	}
-	payload := buf.Bytes()
+
 	src := []byte(p.config.Address)
-	payload = append(payload, src...)
-	log.Info("Trying to join the cluster")
-	for _, addr := range p.config.Unicast.Peers {
-		addr = strings.Trim(addr, " ")
-		log.Debugf("Sending heartbeat message to %s", addr)
-		if err := p.sendMessage(payload, addr); err != nil {
-			log.Errorf("Error while sending heartbeat message to %s: %s", addr, err)
-		}
+	if _, err := buf.Write(src); err != nil {
+		return err
 	}
 
+	payload := buf.Bytes()
 	p.waitGroup.Add(1)
-	go p.heartbeatPeriodically(payload)
-
-	p.waitGroup.Add(1)
-	go p.splitBrainDetection()
+	go p.tryToJoinCluster(payload)
 
 	// Wait for cluster join
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
@@ -186,6 +181,12 @@ func (p *Partition) Run() error {
 	cancel()
 
 	close(p.StartChan)
+
+	p.waitGroup.Add(1)
+	go p.heartbeatPeriodically()
+
+	p.waitGroup.Add(1)
+	go p.splitBrainDetection()
 
 	<-p.done
 
@@ -231,9 +232,8 @@ func (p *Partition) waitForConsensus(ctx context.Context) {
 	}
 
 	c := p.memberCount()
-	master := p.config.Address
 	if c != 0 {
-		master = p.getMasterMember()
+		master := p.getMasterMember()
 		log.Infof("Master member is %s", master)
 		// Check the master node. If you are the master, form a cluster.
 		if master != p.config.Address {
@@ -245,7 +245,27 @@ func (p *Partition) waitForConsensus(ctx context.Context) {
 	return
 }
 
-func (p *Partition) getMasterMember() string {
-	items := p.sortMembersByAge()
-	return items[0].Addr
+func (p *Partition) tryToJoinCluster(payload []byte) {
+	defer p.waitGroup.Done()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	// TODO: Add multicast support
+
+	log.Info("Trying to join the cluster")
+	for {
+		select {
+		case <-ticker.C:
+			for _, addr := range p.config.Unicast.Peers {
+				addr = strings.Trim(addr, " ")
+				log.Debugf("Sending join message to %s", addr)
+				if err := p.sendMessage(payload, addr); err != nil {
+					log.Errorf("Error while sending heartbeat message to %s: %s", addr, err)
+				}
+			}
+		case <-p.nodeInitialized:
+			return
+		case <-p.done:
+			return
+		}
+	}
 }

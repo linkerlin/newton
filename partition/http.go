@@ -42,8 +42,14 @@ func (p *Partition) partitionSetHandler(w http.ResponseWriter, r *http.Request, 
 	}
 	partitionTableLock.Lock()
 	p.table = &table
+	for _, item := range table.Sorted {
+		if item.Addr != p.config.Address {
+			p.addMember(item.Addr, "", item.Birthdate)
+		}
+	}
 	log.Infof("Received partition table from coordinator node: %s", p.table.Sorted[0].Addr)
 	partitionTableLock.Unlock()
+
 	select {
 	case <-p.nodeInitialized:
 		return

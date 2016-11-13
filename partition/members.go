@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -13,9 +14,15 @@ import (
 	"github.com/purak/newton/log"
 )
 
+const (
+	joinMessageFlag      byte = 0
+	heartbeatMessageFlag byte = 1
+)
+
 type member struct {
 	mu sync.RWMutex
 
+	addr, ip     string
 	lastActivity int64
 	birthdate    int64
 }
@@ -23,7 +30,8 @@ type member struct {
 type members struct {
 	mu sync.RWMutex
 
-	m map[string]*member
+	m    map[string]*member
+	byIP map[string]*member
 }
 
 var (
@@ -37,11 +45,12 @@ var (
 
 func newMembers() *members {
 	return &members{
-		m: make(map[string]*member),
+		m:    make(map[string]*member),
+		byIP: make(map[string]*member),
 	}
 }
 
-func (p *Partition) addMember(addr string, birthdate int64) error {
+func (p *Partition) addMember(addr, ip string, birthdate int64) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
 
@@ -49,15 +58,33 @@ func (p *Partition) addMember(addr string, birthdate int64) error {
 		return errMemberAlreadyExist
 	}
 
+	if len(ip) == 0 {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return err
+		}
+
+		ips, err := net.LookupHost(host)
+		if err != nil {
+			return err
+		}
+		// TODO: We should consider to support multiple IP address for an hostname.
+		ip = net.JoinHostPort(ips[0], port)
+	}
+
 	now := clockMonotonicRaw()
 	member := &member{
+		addr:         addr,
+		ip:           ip,
 		lastActivity: now,
 		birthdate:    birthdate,
 	}
 	p.members.m[addr] = member
+	p.members.byIP[ip] = member
+
 	p.waitGroup.Add(1)
 	go p.checkAliveness(addr)
-	log.Infof("New member has been added: %s", addr)
+	log.Infof("New member has been added, Host: %s, IP: %s", addr, ip)
 	return nil
 }
 
@@ -111,19 +138,50 @@ func (p *Partition) getMember(addr string) (*member, error) {
 	return member, nil
 }
 
-func (p *Partition) updateMember(addr string) error {
+func (p *Partition) updateMemberByIP(ip string) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
 
-	member, ok := p.members.m[addr]
+	m, ok := p.members.byIP[ip]
 	if !ok {
 		return errMemberNotFound
 	}
 
-	member.lastActivity = clockMonotonicRaw()
-	p.members.m[addr] = member
+	m.lastActivity = clockMonotonicRaw()
+	p.members.byIP[ip] = m
+
+	log.Debugf("Member: %s is still alive", ip)
+	return nil
+}
+
+func (p *Partition) updateMember(addr string) error {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+
+	m, ok := p.members.m[addr]
+	if !ok {
+		return errMemberNotFound
+	}
+
+	m.lastActivity = clockMonotonicRaw()
+	p.members.m[addr] = m
 
 	log.Debugf("Member: %s is still alive", addr)
+	return nil
+}
+
+func (p *Partition) deleteMemberByIP(ip string) error {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+
+	m, ok := p.members.byIP[ip]
+	if !ok {
+		return errMemberNotFound
+	}
+
+	delete(p.members.m, m.addr)
+	delete(p.members.byIP, ip)
+	log.Infof("Member has been deleted: %s", ip)
 	return nil
 }
 
@@ -131,9 +189,12 @@ func (p *Partition) deleteMember(addr string) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
 
-	if _, ok := p.members.m[addr]; !ok {
+	m, ok := p.members.m[addr]
+	if !ok {
 		return errMemberNotFound
 	}
+
+	delete(p.members.byIP, m.ip)
 	delete(p.members.m, addr)
 	log.Infof("Member has been deleted: %s", addr)
 	return nil
@@ -156,21 +217,16 @@ func (p *Partition) memberCount() int {
 	return len(p.members.m)
 }
 
-func (p *Partition) heartbeatPeriodically(payload []byte) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+func (p *Partition) heartbeatPeriodically() {
+	ticker := time.NewTicker(250 * time.Millisecond)
 	defer p.waitGroup.Done()
 	defer ticker.Stop()
 
+	payload := []byte{heartbeatMessageFlag}
 	for {
 		select {
 		case <-ticker.C:
 			mm := p.getMemberList()
-			for _, addr := range p.config.Unicast.Peers {
-				if _, ok := mm[addr]; !ok {
-					// FIXME: Try to re-add them. This mechanisim should be reconsidered after configuration hot-loading feature is implemented.
-					mm[addr] = 0
-				}
-			}
 			for addr, _ := range mm {
 				go func(payload []byte, addr string) {
 					log.Debugf("Sending heartbeat message to %s", addr)
@@ -211,6 +267,11 @@ func (p *Partition) sortMembersByAge() []memberSort {
 	sort.Sort(ByAge(items))
 	return items
 
+}
+
+func (p *Partition) getMasterMember() string {
+	items := p.sortMembersByAge()
+	return items[0].Addr
 }
 
 func (p *Partition) splitBrainDetection() {
