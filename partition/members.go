@@ -269,7 +269,7 @@ func (p *Partition) sortMembersByAge() []memberSort {
 
 }
 
-func (p *Partition) getMasterMember() string {
+func (p *Partition) getCoordinatorMember() string {
 	items := p.sortMembersByAge()
 	return items[0].Addr
 }
@@ -282,34 +282,34 @@ func (p *Partition) splitBrainDetection() {
 	for {
 		select {
 		case <-ticker.C:
-			realMaster := p.getMasterMemberFromPartitionTable()
-			if len(realMaster) == 0 {
+			currentCoordinator := p.getCoordinatorMemberFromPartitionTable()
+			if len(currentCoordinator) == 0 {
 				continue
 			}
-			addr := p.getMasterMember()
-			if addr != realMaster {
-				log.Warnf("Contradiction between partition table and discovery subsystem. Old master: %s, new master: %s", realMaster, addr)
+			addr := p.getCoordinatorMember()
+			if addr != currentCoordinator {
+				log.Warnf("Contradiction between partition table and discovery subsystem. Coordinator is %s in partition table but discovery reports %s as coordinator.", currentCoordinator, addr)
 				if p.config.Address == addr {
 					p.waitGroup.Add(1)
-					go p.takeOverCluster(realMaster)
+					go p.takeOverCluster(currentCoordinator)
 				}
 				continue
 			}
-			log.Debugf("Current cluster leader is %s", realMaster)
+			log.Debugf("Current cluster coordinator is %s", currentCoordinator)
 		case <-p.done:
 			return
 		}
 	}
 }
 
-func (p *Partition) takeOverCluster(oldMasterAddr string) {
+func (p *Partition) takeOverCluster(cAddr string) {
 	defer p.waitGroup.Done()
 
-	// Try to reach out the old master
-	bd, err := p.checkOldMaster(oldMasterAddr)
+	// Try to reach out the old coordinator
+	bd, err := p.checkCoordinatorNode(cAddr)
 	if err != nil {
 		// It should be offline currently or deals with an internal error.
-		log.Errorf("Error while checking aliveness of the old master node: %s", err)
+		log.Errorf("Error while checking aliveness of the old coordinator node: %s", err)
 	} else {
 		partitionTableLock.RLock()
 		if len(p.table.Sorted) == 0 {
@@ -326,7 +326,7 @@ func (p *Partition) takeOverCluster(oldMasterAddr string) {
 		}
 	}
 
-	// You are the new master. Set a new partition table.
+	// You are the new coordinator. Set a new partition table.
 
 	partitionTableLock.Lock()
 	p.table.Sorted = p.sortMembersByAge()
@@ -339,10 +339,10 @@ func (p *Partition) takeOverCluster(oldMasterAddr string) {
 	}
 }
 
-func (p *Partition) checkOldMaster(oldMasterAddr string) (int64, error) {
+func (p *Partition) checkCoordinatorNode(cAddr string) (int64, error) {
 	dst := url.URL{
 		Scheme: "https",
-		Host:   oldMasterAddr,
+		Host:   cAddr,
 		Path:   "/aliveness",
 	}
 	req, err := http.NewRequest("GET", dst.String(), nil)
@@ -356,7 +356,7 @@ func (p *Partition) checkOldMaster(oldMasterAddr string) (int64, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("Old master returned HTTP %d", res.StatusCode)
+		return 0, fmt.Errorf("Old coordinator returned HTTP %d", res.StatusCode)
 	}
 	msg := &AlivenessMsg{}
 

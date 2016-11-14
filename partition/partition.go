@@ -24,6 +24,8 @@ import (
 	"github.com/purak/newton/log"
 )
 
+const CLOCK_MONOTONIC_RAW uintptr = 4
+
 type Partition struct {
 	config          *config.DHT
 	httpServer      *graceful.Server
@@ -42,8 +44,6 @@ type Partition struct {
 	nodeInitialized chan struct{}
 	done            chan struct{}
 }
-
-const CLOCK_MONOTONIC_RAW uintptr = 4
 
 func clockMonotonicRaw() int64 {
 	var ts syscall.Timespec
@@ -78,37 +78,17 @@ func New(c *config.DHT) (*Partition, error) {
 	return p, nil
 }
 
-// Run fires up a new partition table.
-func (p *Partition) Run() error {
-	defer func() {
-		log.Info("DHT instance has been closed.")
-		close(p.StopChan)
-	}()
+func (p *Partition) checkHTTPAliveness(httpStarted chan struct{}) {
+	defer p.waitGroup.Done()
 
-	router := httprouter.New()
-
-	router.HEAD("/aliveness", p.alivenessHandler)
-	router.GET("/aliveness", p.alivenessHandler)
-	router.POST("/partition-table/set", p.partitionSetHandler)
-	s := &http.Server{
-		Addr:    p.config.Listen,
-		Handler: router,
+	dst := url.URL{
+		Scheme: "https",
+		Host:   p.config.Listen,
+		Path:   "/aliveness",
 	}
-	http2.ConfigureServer(s, nil)
-	p.httpServer = &graceful.Server{
-		NoSignalHandling: true,
-		Server:           s,
-	}
-
-	httpStarted := make(chan struct{})
-	checkHTTPAliveness := func() {
-		dst := url.URL{
-			Scheme: "https",
-			Host:   p.config.Listen,
-			Path:   "/aliveness",
-		}
-		for {
-			<-time.After(50 * time.Millisecond)
+	for {
+		select {
+		case <-time.After(50 * time.Millisecond):
 			req, err := http.NewRequest("HEAD", dst.String(), nil)
 			if err != nil {
 				log.Errorf("Error while creating new request: ", err)
@@ -123,26 +103,57 @@ func (p *Partition) Run() error {
 				close(httpStarted)
 				return
 			}
+		case <-p.done:
+			return
 		}
 	}
+}
 
+func (p *Partition) runHTTPServerAtBackground(httpStarted chan struct{}) error {
+	p.waitGroup.Add(1)
+	go p.checkHTTPAliveness(httpStarted)
+
+	log.Infof("Partition manager listens %s", p.config.Listen)
+	err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
+	if err != nil {
+		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
+			log.Debugf("Something wrong with HTTP/2 server: %s", err)
+			// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
+			// This block can be invoked during normal closing process but Close method will handle
+			// redundant Close call.
+			p.Close()
+		}
+		log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
+		return err
+	}
+	return nil
+}
+
+// Run fires up a new partition table.
+func (p *Partition) Run() error {
+	defer func() {
+		log.Info("DHT instance has been closed.")
+		close(p.StopChan)
+	}()
+
+	router := httprouter.New()
+	router.HEAD("/aliveness", p.alivenessHandler)
+	router.GET("/aliveness", p.alivenessHandler)
+	router.POST("/partition-table/set", p.partitionSetHandler)
+	s := &http.Server{
+		Addr:    p.config.Listen,
+		Handler: router,
+	}
+	http2.ConfigureServer(s, nil)
+	p.httpServer = &graceful.Server{
+		NoSignalHandling: true,
+		Server:           s,
+	}
+
+	httpStarted := make(chan struct{})
 	// TODO: We must close HTTP server if something went wrong in this function.
 	p.serverErrGr.Go(func() error {
-		log.Infof("Partition manager listens %s", p.config.Listen)
-		go checkHTTPAliveness()
-		err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
-		if err != nil {
-			if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
-				log.Debugf("Something wrong with HTTP/2 server: %s", err)
-				// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
-				// This block can be invoked during normal closing process but Close method will handle
-				// redundant Close call.
-				p.Close()
-			}
-			log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
-			return err
-		}
-		return nil
+		return p.runHTTPServerAtBackground(httpStarted)
 	})
 
 	// TODO: We may need to set a timer and return about an error about timeout?
@@ -211,17 +222,6 @@ func (p *Partition) Run() error {
 	return p.serverErrGr.Wait()
 }
 
-func (p *Partition) Close() {
-	select {
-	case <-p.done:
-		// Already closed
-		return
-	default:
-	}
-
-	close(p.done)
-}
-
 func (p *Partition) waitForConsensus(ctx context.Context) {
 	defer p.waitGroup.Done()
 	select {
@@ -233,8 +233,8 @@ func (p *Partition) waitForConsensus(ctx context.Context) {
 
 	c := p.memberCount()
 	if c != 0 {
-		master := p.getMasterMember()
-		log.Infof("Master member is %s", master)
+		master := p.getCoordinatorMember()
+		log.Infof("Coordinator member is %s", master)
 		// Check the master node. If you are the master, form a cluster.
 		if master != p.config.Address {
 			return
@@ -268,4 +268,15 @@ func (p *Partition) tryToJoinCluster(payload []byte) {
 			return
 		}
 	}
+}
+
+func (p *Partition) Close() {
+	select {
+	case <-p.done:
+		// Already closed
+		return
+	default:
+	}
+
+	close(p.done)
 }

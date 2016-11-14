@@ -83,8 +83,8 @@ func (p *Partition) readFromUnicastUDP() {
 
 func (p *Partition) processJoin(data []byte, ip string) {
 	defer p.waitGroup.Done()
-	var birthdate int64
 
+	var birthdate int64
 	b := bytes.NewBuffer(data[1:9])
 	binary.Read(b, binary.LittleEndian, &birthdate)
 	addr := string(data[9:])
@@ -110,6 +110,7 @@ func (p *Partition) processJoin(data []byte, ip string) {
 
 func (p *Partition) processHeartbeat(ip string) {
 	defer p.waitGroup.Done()
+
 	select {
 	case <-p.nodeInitialized:
 		log.Debugf("Heartbeat message received from %s", ip)
@@ -123,7 +124,7 @@ func (p *Partition) processHeartbeat(ip string) {
 func (p *Partition) backgroundJoin(addr string) {
 	defer p.waitGroup.Done()
 
-	mAddr := p.getMasterMemberFromPartitionTable()
+	mAddr := p.getCoordinatorMemberFromPartitionTable()
 	if mAddr != p.config.Address {
 		// You're not the master node.
 		return

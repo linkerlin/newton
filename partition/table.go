@@ -120,7 +120,7 @@ func (p *Partition) joinCluster(addr string) error {
 	return p.pushPartitionTable()
 }
 
-func (p *Partition) getMasterMemberFromPartitionTable() string {
+func (p *Partition) getCoordinatorMemberFromPartitionTable() string {
 	partitionTableLock.RLock()
 	defer partitionTableLock.RUnlock()
 	if len(p.table.Sorted) == 0 {
