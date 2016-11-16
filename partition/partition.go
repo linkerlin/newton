@@ -27,22 +27,24 @@ import (
 const CLOCK_MONOTONIC_RAW uintptr = 4
 
 type Partition struct {
-	config          *config.DHT
-	httpServer      *graceful.Server
-	httpClient      *http.Client
-	birthdate       int64
-	members         *members
-	unicastSocket   *net.UDPConn
-	serverErrGr     errgroup.Group
-	requestWG       sync.WaitGroup
-	waitGroup       sync.WaitGroup
-	table           *partitionTable
-	StartChan       chan struct{}
-	StopChan        chan struct{}
-	listening       chan struct{}
-	closeUDPChan    chan struct{}
-	nodeInitialized chan struct{}
-	done            chan struct{}
+	config            *config.DHT
+	httpServer        *graceful.Server
+	httpTransport     *http.Transport
+	httpClient        *http.Client
+	birthdate         int64
+	members           *members
+	unicastSocket     *net.UDPConn
+	serverErrGr       errgroup.Group
+	requestWG         sync.WaitGroup
+	waitGroup         sync.WaitGroup
+	table             *partitionTable
+	suspiciousMembers *suspiciousMembers
+	StartChan         chan struct{}
+	StopChan          chan struct{}
+	listening         chan struct{}
+	closeUDPChan      chan struct{}
+	nodeInitialized   chan struct{}
+	done              chan struct{}
 }
 
 func clockMonotonicRaw() int64 {
@@ -56,24 +58,29 @@ func New(c *config.DHT) (*Partition, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	table := &partitionTable{
+	pTable := &partitionTable{
 		Partition: make(map[int]string),
 		Members:   make(map[string][]int),
 		Sorted:    []memberSort{},
 	}
+	sMembers := &suspiciousMembers{
+		m: make(map[string]struct{}),
+	}
 
 	p := &Partition{
-		config:          c,
-		httpClient:      &http.Client{Transport: tr},
-		birthdate:       time.Now().UnixNano(),
-		members:         newMembers(),
-		table:           table,
-		StartChan:       make(chan struct{}),
-		StopChan:        make(chan struct{}),
-		listening:       make(chan struct{}),
-		closeUDPChan:    make(chan struct{}),
-		nodeInitialized: make(chan struct{}),
-		done:            make(chan struct{}),
+		config:            c,
+		httpTransport:     tr,
+		httpClient:        &http.Client{Transport: tr},
+		birthdate:         time.Now().UnixNano(),
+		members:           newMembers(),
+		table:             pTable,
+		suspiciousMembers: sMembers,
+		StartChan:         make(chan struct{}),
+		StopChan:          make(chan struct{}),
+		listening:         make(chan struct{}),
+		closeUDPChan:      make(chan struct{}),
+		nodeInitialized:   make(chan struct{}),
+		done:              make(chan struct{}),
 	}
 	return p, nil
 }
@@ -99,6 +106,10 @@ func (p *Partition) checkHTTPAliveness(httpStarted chan struct{}) {
 				// Probably "connection refused"
 				log.Debugf("Error while checking aliveness: %s", err)
 			}
+			if err := res.Body.Close(); err != nil {
+				log.Debugf("Error while checking aliveness: %s", err)
+			}
+
 			if res.StatusCode == http.StatusOK {
 				close(httpStarted)
 				return
@@ -132,7 +143,7 @@ func (p *Partition) runHTTPServerAtBackground(httpStarted chan struct{}) error {
 // Run fires up a new partition table.
 func (p *Partition) Run() error {
 	defer func() {
-		log.Info("DHT instance has been closed.")
+		log.Info("Partition manager has been stopped.")
 		close(p.StopChan)
 	}()
 
@@ -140,6 +151,7 @@ func (p *Partition) Run() error {
 	router.HEAD("/aliveness", p.alivenessHandler)
 	router.GET("/aliveness", p.alivenessHandler)
 	router.POST("/partition-table/set", p.partitionSetHandler)
+	router.POST("/check-member", p.checkMemberHandler)
 	s := &http.Server{
 		Addr:    p.config.Listen,
 		Handler: router,

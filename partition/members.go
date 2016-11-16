@@ -1,12 +1,8 @@
 package partition
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
-	"net/http"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -25,6 +21,7 @@ type member struct {
 	addr, ip     string
 	lastActivity int64
 	birthdate    int64
+	available    bool
 }
 
 type members struct {
@@ -39,6 +36,7 @@ var (
 )
 
 var (
+	errDifferentBirthdate = errors.New("Birthdate is different")
 	errMemberAlreadyExist = errors.New("Member already exist")
 	errMemberNotFound     = errors.New("Member could not be found")
 )
@@ -54,7 +52,11 @@ func (p *Partition) addMember(addr, ip string, birthdate int64) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
 
-	if _, ok := p.members.m[addr]; ok {
+	m, ok := p.members.m[addr]
+	if ok {
+		if m.birthdate != birthdate {
+			return errDifferentBirthdate
+		}
 		return errMemberAlreadyExist
 	}
 
@@ -73,14 +75,15 @@ func (p *Partition) addMember(addr, ip string, birthdate int64) error {
 	}
 
 	now := clockMonotonicRaw()
-	member := &member{
+	nm := &member{
 		addr:         addr,
 		ip:           ip,
 		lastActivity: now,
 		birthdate:    birthdate,
+		available:    true,
 	}
-	p.members.m[addr] = member
-	p.members.byIP[ip] = member
+	p.members.m[addr] = nm
+	p.members.byIP[ip] = nm
 
 	p.waitGroup.Add(1)
 	go p.checkAliveness(addr)
@@ -109,15 +112,14 @@ func (p *Partition) checkAliveness(addr string) {
 			m.mu.RUnlock()
 
 			if dead {
-				err = p.deleteMember(addr)
-				if err == errMemberNotFound {
-					err = nil
+				bd, err := p.checkMember(addr)
+				if err != nil || bd != m.birthdate {
+					// Notify the coordinator
+					if nErr := p.notifyCoordinator(addr); nErr != nil {
+						log.Errorf("Error while notifying the coordinator node about an unhealthy member: %s", nErr)
+					}
 				}
-				if err != nil {
-					log.Errorf("Error while deleting stale member from cluster: %s", err)
-					// Don't quit. This can be important. Just keep logging about this.
-					continue
-				}
+				m.available = false
 				return
 			}
 		case <-p.done:
@@ -138,6 +140,18 @@ func (p *Partition) getMember(addr string) (*member, error) {
 	return member, nil
 }
 
+func (p *Partition) checkMemberWithBirthdate(addr string, birthdate int64) bool {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+
+	member, ok := p.members.m[addr]
+	if !ok {
+		return false
+	}
+
+	return member.birthdate == birthdate
+}
+
 func (p *Partition) updateMemberByIP(ip string) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
@@ -147,7 +161,11 @@ func (p *Partition) updateMemberByIP(ip string) error {
 		return errMemberNotFound
 	}
 
+	m.mu.Lock()
+	m.available = true
 	m.lastActivity = clockMonotonicRaw()
+	m.mu.Unlock()
+
 	p.members.byIP[ip] = m
 
 	log.Debugf("Member: %s is still alive", ip)
@@ -163,25 +181,12 @@ func (p *Partition) updateMember(addr string) error {
 		return errMemberNotFound
 	}
 
+	m.mu.Lock()
+	m.available = true
 	m.lastActivity = clockMonotonicRaw()
-	p.members.m[addr] = m
+	m.mu.Unlock()
 
 	log.Debugf("Member: %s is still alive", addr)
-	return nil
-}
-
-func (p *Partition) deleteMemberByIP(ip string) error {
-	p.members.mu.Lock()
-	defer p.members.mu.Unlock()
-
-	m, ok := p.members.byIP[ip]
-	if !ok {
-		return errMemberNotFound
-	}
-
-	delete(p.members.m, m.addr)
-	delete(p.members.byIP, ip)
-	log.Infof("Member has been deleted: %s", ip)
 	return nil
 }
 
@@ -193,22 +198,27 @@ func (p *Partition) deleteMember(addr string) error {
 	if !ok {
 		return errMemberNotFound
 	}
-
 	delete(p.members.byIP, m.ip)
 	delete(p.members.m, addr)
 	log.Infof("Member has been deleted: %s", addr)
 	return nil
 }
 
-func (p *Partition) getMemberList() map[string]int64 {
+func (p *Partition) deleteMemberWithBirthdate(addr string, birthdate int64) error {
 	p.members.mu.Lock()
 	defer p.members.mu.Unlock()
-	// Get a thread-safe copy of members struct
-	mm := make(map[string]int64)
-	for addr, item := range p.members.m {
-		mm[addr] = item.birthdate
+
+	m, ok := p.members.m[addr]
+	if !ok {
+		return errMemberNotFound
 	}
-	return mm
+	if m.birthdate != birthdate {
+		return errDifferentBirthdate
+	}
+	delete(p.members.byIP, m.ip)
+	delete(p.members.m, addr)
+	log.Infof("Member has been deleted: %s", addr)
+	return nil
 }
 
 func (p *Partition) memberCount() int {
@@ -226,8 +236,11 @@ func (p *Partition) heartbeatPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			mm := p.getMemberList()
-			for addr, _ := range mm {
+			p.members.mu.Lock()
+			for addr, item := range p.members.m {
+				if !item.available {
+					continue
+				}
 				go func(payload []byte, addr string) {
 					log.Debugf("Sending heartbeat message to %s", addr)
 					if err := p.sendMessage(payload, addr); err != nil {
@@ -235,10 +248,37 @@ func (p *Partition) heartbeatPeriodically() {
 					}
 				}(payload, addr)
 			}
+			p.members.mu.Unlock()
 		case <-p.done:
 			return
 		}
 	}
+}
+
+func (p *Partition) getMemberList2() []string {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+
+	// Get a thread-safe copy of members struct
+	mm := []string{}
+	for addr, _ := range p.members.m {
+		mm = append(mm, addr)
+	}
+	return mm
+}
+
+func (p *Partition) getMemberList() map[string]int64 {
+	p.members.mu.Lock()
+	defer p.members.mu.Unlock()
+	// Get a thread-safe copy of members struct
+	mm := make(map[string]int64)
+	for addr, item := range p.members.m {
+		if !item.available {
+			continue
+		}
+		mm[addr] = item.birthdate
+	}
+	return mm
 }
 
 type memberSort struct {
@@ -267,101 +307,4 @@ func (p *Partition) sortMembersByAge() []memberSort {
 	sort.Sort(ByAge(items))
 	return items
 
-}
-
-func (p *Partition) getCoordinatorMember() string {
-	items := p.sortMembersByAge()
-	return items[0].Addr
-}
-
-func (p *Partition) splitBrainDetection() {
-	ticker := time.NewTicker(time.Second)
-	defer p.waitGroup.Done()
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			currentCoordinator := p.getCoordinatorMemberFromPartitionTable()
-			if len(currentCoordinator) == 0 {
-				continue
-			}
-			addr := p.getCoordinatorMember()
-			if addr != currentCoordinator {
-				log.Warnf("Contradiction between partition table and discovery subsystem. Coordinator is %s in partition table but discovery reports %s as coordinator.", currentCoordinator, addr)
-				if p.config.Address == addr {
-					p.waitGroup.Add(1)
-					go p.takeOverCluster(currentCoordinator)
-				}
-				continue
-			}
-			log.Debugf("Current cluster coordinator is %s", currentCoordinator)
-		case <-p.done:
-			return
-		}
-	}
-}
-
-func (p *Partition) takeOverCluster(cAddr string) {
-	defer p.waitGroup.Done()
-
-	// Try to reach out the old coordinator
-	bd, err := p.checkCoordinatorNode(cAddr)
-	if err != nil {
-		// It should be offline currently or deals with an internal error.
-		log.Errorf("Error while checking aliveness of the old coordinator node: %s", err)
-	} else {
-		partitionTableLock.RLock()
-		if len(p.table.Sorted) == 0 {
-			// TODO: It should be impossible. Deal with this.
-			log.Errorf("No member found in partition table")
-			return
-		}
-		birthdate := p.table.Sorted[0].Birthdate
-		partitionTableLock.RUnlock()
-		// Restarted. Take over the cluster
-		if birthdate == bd {
-			// TODO: Possible split brain. Deal with this.
-			return
-		}
-	}
-
-	// You are the new coordinator. Set a new partition table.
-
-	partitionTableLock.Lock()
-	p.table.Sorted = p.sortMembersByAge()
-	partitionTableLock.Unlock()
-
-	log.Infof("Taking over coordination role.")
-	// TODO: re-try this in error condition
-	if err := p.pushPartitionTable(); err != nil {
-		log.Errorf("Error while pushing partition table.")
-	}
-}
-
-func (p *Partition) checkCoordinatorNode(cAddr string) (int64, error) {
-	dst := url.URL{
-		Scheme: "https",
-		Host:   cAddr,
-		Path:   "/aliveness",
-	}
-	req, err := http.NewRequest("GET", dst.String(), nil)
-	if err != nil {
-		return 0, err
-	}
-	// TODO: add timeout
-	res, err := p.httpClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("Old coordinator returned HTTP %d", res.StatusCode)
-	}
-	msg := &AlivenessMsg{}
-
-	if err := json.NewDecoder(res.Body).Decode(msg); err != nil {
-		return 0, err
-	}
-	return msg.Birthdate, nil
 }

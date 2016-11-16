@@ -92,18 +92,16 @@ func (p *Partition) processJoin(data []byte, ip string) {
 	log.Infof("Join message received from IP: %s, address: %s", ip, addr)
 	err := p.addMember(addr, ip, birthdate)
 	if err == errMemberAlreadyExist {
-		if uErr := p.updateMember(addr); uErr != nil {
-			log.Errorf("Error while adding member IP: %s, address: %s: %s", ip, addr, err)
-		}
-		return
+		err = nil
 	}
 	if err != nil {
-		log.Errorf("Error while adding member IP: %s, address: %s: %s", addr, err)
+		log.Errorf("Error while adding member %s: %s", addr, err)
+		return
 	}
 	select {
 	case <-p.nodeInitialized:
 		p.waitGroup.Add(1)
-		go p.backgroundJoin(addr)
+		go p.backgroundJoin(addr, birthdate)
 	default:
 	}
 }
@@ -121,7 +119,7 @@ func (p *Partition) processHeartbeat(ip string) {
 	}
 }
 
-func (p *Partition) backgroundJoin(addr string) {
+func (p *Partition) backgroundJoin(addr string, birthdate int64) {
 	defer p.waitGroup.Done()
 
 	mAddr := p.getCoordinatorMemberFromPartitionTable()
@@ -129,7 +127,7 @@ func (p *Partition) backgroundJoin(addr string) {
 		// You're not the master node.
 		return
 	}
-	if err := p.joinCluster(addr); err != nil {
+	if err := p.joinCluster(addr, birthdate); err != nil {
 		// TODO: We should re-try this.
 		log.Errorf("Error while adding a new member to cluster: %s", err)
 		return

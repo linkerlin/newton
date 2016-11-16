@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/purak/newton/log"
@@ -41,13 +42,48 @@ func (p *Partition) partitionSetHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	partitionTableLock.Lock()
+	log.Infof("Partition table received from coordinator node: %s", table.Sorted[0].Addr)
 	p.table = &table
-	for _, item := range table.Sorted {
-		if item.Addr != p.config.Address {
-			p.addMember(item.Addr, "", item.Birthdate)
+
+	// Remove stale members
+	list := make(map[string]struct{})
+	for _, item := range p.table.Sorted {
+		list[item.Addr] = struct{}{}
+	}
+	for _, addr := range p.getMemberList2() {
+		if _, ok := list[addr]; !ok {
+			err = p.deleteMember(addr)
+			if err == errMemberNotFound {
+				err = nil
+			}
+			if err != nil {
+				log.Errorf("Error while deleting stale member from discovery subsystem: %s", err)
+			}
 		}
 	}
-	log.Infof("Received partition table from coordinator node: %s", p.table.Sorted[0].Addr)
+
+	for _, item := range table.Sorted {
+		if item.Addr != p.config.Address {
+			// We may catch a restarted member. Check the birhdate.
+			if !p.checkMemberWithBirthdate(item.Addr, item.Birthdate) {
+				err = p.deleteMember(item.Addr)
+				if err == errMemberNotFound {
+					err = nil
+				}
+				if err != nil {
+					log.Errorf("Error while deleting member from discovery subsystem: %s", err)
+				}
+			}
+			err = p.addMember(item.Addr, "", item.Birthdate)
+			if err == errMemberAlreadyExist {
+				err = nil
+			}
+			if err != nil {
+				log.Errorf("Error while adding member to discovery subsystem: %s", err)
+			}
+		}
+	}
+
 	partitionTableLock.Unlock()
 
 	select {
@@ -68,4 +104,43 @@ func (p *Partition) jsonErrorResponse(w http.ResponseWriter, desc string, status
 	if err := json.NewEncoder(w).Encode(msg); err != nil {
 		log.Errorf("Error while returning error message: %s", err)
 	}
+}
+
+type suspiciousMembers struct {
+	mu sync.RWMutex
+
+	m map[string]struct{}
+}
+
+func (p *Partition) checkMemberHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	if r.Body == nil {
+		p.jsonErrorResponse(w, "Send a request body", http.StatusBadRequest)
+		return
+	}
+	var c CheckMember
+	err := json.NewDecoder(r.Body).Decode(&c)
+	if err != nil {
+		p.jsonErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p.tryCheckSuspiciousMember(c.Member)
+}
+
+func (p *Partition) tryCheckSuspiciousMember(addr string) {
+	p.suspiciousMembers.mu.Lock()
+	_, ok := p.suspiciousMembers.m[addr]
+	if !ok {
+		// TODO: We keep members in a map with their birthdate for god's sake.
+		partitionTableLock.RLock()
+		for _, item := range p.table.Sorted {
+			if item.Addr != addr {
+				continue
+			}
+			p.waitGroup.Add(1)
+			p.suspiciousMembers.m[addr] = struct{}{}
+			go p.checkSuspiciousMember(addr, item.Birthdate)
+		}
+		partitionTableLock.RUnlock()
+	}
+	p.suspiciousMembers.mu.Unlock()
 }

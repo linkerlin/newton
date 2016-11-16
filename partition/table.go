@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"sort"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -32,6 +33,7 @@ func (p *Partition) createPartitionTable() {
 	partitionTableLock.Lock()
 	defer partitionTableLock.Unlock()
 
+	// That's first-run. We must trust the discovery subsystem.
 	sorted := p.sortMembersByAge()
 	memberCount := len(sorted)
 	log.Infof("Forming a cluster with %d node(s)", memberCount)
@@ -82,7 +84,7 @@ func (p *Partition) pushPartitionTable() error {
 		})
 	}
 
-	// Wait for all HTTP fetches to complete.
+	// Wait for all HTTP pushes to complete.
 	return g.Wait()
 }
 
@@ -110,14 +112,21 @@ func (p *Partition) setPartitionTable(addr string, serialized []byte) error {
 	return nil
 }
 
-func (p *Partition) joinCluster(addr string) error {
+func (p *Partition) joinCluster(addr string, birthdate int64) error {
 	partitionTableLock.Lock()
 	defer partitionTableLock.Unlock()
 
-	log.Infof("Joining a new member to cluster: %s", addr)
-	sorted := p.sortMembersByAge()
-	p.table.Sorted = sorted
-	return p.pushPartitionTable()
+	item := memberSort{
+		Addr:      addr,
+		Birthdate: birthdate,
+	}
+	p.table.Sorted = append(p.table.Sorted, item)
+	sort.Sort(ByAge(p.table.Sorted))
+	if err := p.pushPartitionTable(); err != nil {
+		return err
+	}
+	log.Infof("%s has been joined the cluster.", addr)
+	return nil
 }
 
 func (p *Partition) getCoordinatorMemberFromPartitionTable() string {
