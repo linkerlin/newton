@@ -61,7 +61,6 @@ func (p *Partition) takeOverCluster(cAddr string) {
 		// It should be offline currently or deals with an internal error.
 		log.Errorf("Error while checking aliveness of the old coordinator node: %s", err)
 	} else {
-
 		// Restarted. Take over the cluster
 		if birthdate == bd {
 			// TODO: Possible split brain. Deal with this.
@@ -73,8 +72,7 @@ func (p *Partition) takeOverCluster(cAddr string) {
 		log.Errorf("Error while deleting the old coordinator from discovery: %s", err)
 	}
 
-	// You are the new coordinator. Set a new partition table.
-
+	// You are the new coordinator. Set a new partition table.1
 	partitionTableLock.Lock()
 	defer partitionTableLock.Unlock()
 	p.table.Sorted = p.sortMembersByAge()
