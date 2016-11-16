@@ -165,13 +165,13 @@ func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
 
 	count := 1
 	// TODO: retry-count should be configurable.
-	for count <= 3 {
+	for count <= 4 {
 		count++
 		bd, err := p.checkMember(addr)
 		if err != nil {
 			log.Errorf("Error while checking %s: %s", addr, err)
 			// Wait some time
-			<-time.After(time.Second)
+			<-time.After(500 * time.Millisecond)
 			continue
 		}
 		if bd == birthdate {

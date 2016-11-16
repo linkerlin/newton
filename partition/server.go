@@ -98,10 +98,19 @@ func (p *Partition) processJoin(data []byte, ip string) {
 		log.Errorf("Error while adding member %s: %s", addr, err)
 		return
 	}
+
 	select {
 	case <-p.nodeInitialized:
-		p.waitGroup.Add(1)
-		go p.backgroundJoin(addr, birthdate)
+		mAddr := p.getCoordinatorMemberFromPartitionTable()
+		if mAddr != p.config.Address {
+			// You're not the master node.
+			return
+		}
+		if err := p.joinCluster(addr, birthdate); err != nil {
+			// TODO: We should re-try this.
+			log.Errorf("Error while adding a new member to cluster: %s", err)
+			return
+		}
 	default:
 	}
 }
@@ -119,21 +128,6 @@ func (p *Partition) processHeartbeat(ip string) {
 	}
 }
 
-func (p *Partition) backgroundJoin(addr string, birthdate int64) {
-	defer p.waitGroup.Done()
-
-	mAddr := p.getCoordinatorMemberFromPartitionTable()
-	if mAddr != p.config.Address {
-		// You're not the master node.
-		return
-	}
-	if err := p.joinCluster(addr, birthdate); err != nil {
-		// TODO: We should re-try this.
-		log.Errorf("Error while adding a new member to cluster: %s", err)
-		return
-	}
-
-}
 func (p *Partition) sendMessage(data []byte, addr string) error {
 	uaddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {

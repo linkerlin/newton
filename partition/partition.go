@@ -262,7 +262,6 @@ func (p *Partition) tryToJoinCluster(payload []byte) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	// TODO: Add multicast support
-
 	log.Info("Trying to join the cluster")
 	for {
 		select {
@@ -289,6 +288,5 @@ func (p *Partition) Close() {
 		return
 	default:
 	}
-
 	close(p.done)
 }

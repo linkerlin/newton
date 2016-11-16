@@ -86,15 +86,16 @@ func (p *Partition) addMember(addr, ip string, birthdate int64) error {
 	p.members.byIP[ip] = nm
 
 	p.waitGroup.Add(1)
-	go p.checkAliveness(addr)
+	go p.checkAliveness(addr, birthdate)
 	log.Infof("New member has been added, Host: %s, IP: %s", addr, ip)
 	return nil
 }
 
-func (p *Partition) checkAliveness(addr string) {
+func (p *Partition) checkAliveness(addr string, birthdate int64) {
 	defer p.waitGroup.Done()
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -104,23 +105,28 @@ func (p *Partition) checkAliveness(addr string) {
 				return
 			}
 			if err != nil {
-				log.Errorf("Error while checking lastActivity of %d", addr)
+				log.Errorf("Error while getting member %s: %s", addr, err)
 				continue
 			}
+			if !p.checkMemberWithBirthdate(addr, birthdate) {
+				log.Warnf("Stopping aliveness check for %s, birth date: %d", addr, birthdate)
+				return
+			}
+			// Network operations may take a long time. Use locks wisely.
 			m.mu.RLock()
 			dead := m.lastActivity+memberDeadLimit < clockMonotonicRaw()
 			m.mu.RUnlock()
-
 			if dead {
 				bd, err := p.checkMember(addr)
-				if err != nil || bd != m.birthdate {
+				if err != nil || bd != birthdate {
 					// Notify the coordinator
 					if nErr := p.notifyCoordinator(addr); nErr != nil {
 						log.Errorf("Error while notifying the coordinator node about an unhealthy member: %s", nErr)
 					}
+					m.mu.Lock()
+					m.available = false
+					m.mu.Unlock()
 				}
-				m.available = false
-				return
 			}
 		case <-p.done:
 			return
@@ -238,9 +244,12 @@ func (p *Partition) heartbeatPeriodically() {
 		case <-ticker.C:
 			p.members.mu.Lock()
 			for addr, item := range p.members.m {
+				item.mu.RLock()
 				if !item.available {
+					item.mu.RUnlock()
 					continue
 				}
+				item.mu.RUnlock()
 				go func(payload []byte, addr string) {
 					log.Debugf("Sending heartbeat message to %s", addr)
 					if err := p.sendMessage(payload, addr); err != nil {
