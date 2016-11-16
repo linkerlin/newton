@@ -44,15 +44,19 @@ func (p *Partition) partitionSetHandler(w http.ResponseWriter, r *http.Request, 
 	partitionTableLock.Lock()
 	defer partitionTableLock.Unlock()
 
-	// Check the sender
-	cn := p.getCoordinatorMember()
-	cAddr := table.Sorted[0].Addr
-	if cn != cAddr {
-		log.Warnf("%s tried to set a partition table. Rejected!", cAddr)
-		w.WriteHeader(http.StatusConflict)
-		return
+	// Check the sender if you already initialized.
+	select {
+	case <-p.nodeInitialized:
+		cn := p.getCoordinatorMember()
+		cAddr := table.Sorted[0].Addr
+		if cn != cAddr {
+			log.Warnf("%s tried to set a partition table. Rejected!", cAddr)
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+	default:
 	}
-	log.Infof("Partition table received from coordinator node: %s", cAddr)
+	log.Infof("Partition table received from coordinator node: %s", table.Sorted[0].Addr)
 	p.table = &table
 
 	// Remove stale members
