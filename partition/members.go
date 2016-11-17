@@ -24,6 +24,40 @@ type member struct {
 	available    bool
 }
 
+func (m *member) getAddr() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.addr
+}
+
+func (m *member) getIP() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.ip
+}
+func (m *member) getLastActivity() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.lastActivity
+}
+
+func (m *member) getBirthdate() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.birthdate
+}
+
+func (m *member) getAvailable() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.available
+}
+
 type members struct {
 	mu sync.RWMutex
 
@@ -54,7 +88,7 @@ func (p *Partition) addMember(addr, ip string, birthdate int64) error {
 
 	m, ok := p.members.m[addr]
 	if ok {
-		if m.birthdate != birthdate {
+		if m.getBirthdate() != birthdate {
 			return errDifferentBirthdate
 		}
 		return errMemberAlreadyExist
@@ -113,9 +147,7 @@ func (p *Partition) checkAliveness(addr string, birthdate int64) {
 				return
 			}
 			// Network operations may take a long time. Use locks wisely.
-			m.mu.RLock()
-			dead := m.lastActivity+memberDeadLimit < clockMonotonicRaw()
-			m.mu.RUnlock()
+			dead := m.getLastActivity()+memberDeadLimit < clockMonotonicRaw()
 			if dead {
 				bd, err := p.checkMember(addr)
 				if err != nil || bd != birthdate {
@@ -204,7 +236,11 @@ func (p *Partition) deleteMember(addr string) error {
 	if !ok {
 		return errMemberNotFound
 	}
-	delete(p.members.byIP, m.ip)
+	// FIXME: This may be useless.
+	m.mu.RLock()
+	ip := m.ip
+	m.mu.RUnlock()
+	delete(p.members.byIP, ip)
 	delete(p.members.m, addr)
 	log.Infof("Member has been deleted: %s", addr)
 	return nil
@@ -218,7 +254,7 @@ func (p *Partition) deleteMemberWithBirthdate(addr string, birthdate int64) erro
 	if !ok {
 		return errMemberNotFound
 	}
-	if m.birthdate != birthdate {
+	if m.getBirthdate() != birthdate {
 		return errDifferentBirthdate
 	}
 	delete(p.members.byIP, m.ip)
@@ -282,10 +318,13 @@ func (p *Partition) getMemberList() map[string]int64 {
 	// Get a thread-safe copy of members struct
 	mm := make(map[string]int64)
 	for addr, item := range p.members.m {
+		item.mu.RLock()
 		if !item.available {
+			item.mu.RUnlock()
 			continue
 		}
 		mm[addr] = item.birthdate
+		item.mu.RUnlock()
 	}
 	return mm
 }

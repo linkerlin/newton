@@ -180,7 +180,7 @@ func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
 	}
 	// Remove from partition table
 	// TODO: Rearrangements in partition table and backups will be implemented in the future.
-	partitionTableLock.RLock()
+	partitionTableLock.Lock()
 	for i, item := range p.table.Sorted {
 		if item.Addr != addr {
 			continue
@@ -195,5 +195,5 @@ func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
 	if err := p.pushPartitionTable(); err != nil {
 		log.Errorf("Error while pushing partition table: %s", err)
 	}
-	partitionTableLock.RUnlock()
+	partitionTableLock.Unlock()
 }
