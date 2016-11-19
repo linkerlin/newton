@@ -1,0 +1,36 @@
+syntax = 'proto3';
+
+package partition;
+
+service Partition {
+  rpc Aliveness (Dummy) returns (AlivenessResponse) {}
+
+  rpc DenunciateForMember (DenunciateRequest) returns (Dummy) {}
+
+  rpc SetPartitionTable(PartitionTable) returns (Dummy) {}
+}
+
+message DenunciateRequest { 
+    string address = 1;
+}
+
+message AlivenessResponse { 
+    int64 birthdate = 1;
+}
+
+message Dummy {}
+
+message Member {
+    string address = 1;
+    int64 birthdate = 2;
+}
+
+message PartitionsOfMember {
+    repeated int32 partitions = 1;
+}
+
+message PartitionTable { 
+  map<int32, string> partitions = 1;
+  map<string, PartitionsOfMember> members = 2;
+  repeated Member sorted = 3;
+}

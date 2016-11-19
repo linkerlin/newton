@@ -2,42 +2,36 @@ package partition
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/binary"
 	"net"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
-	graceful "gopkg.in/tylerb/graceful.v1"
+	"google.golang.org/grpc"
 
-	"golang.org/x/net/http2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/purak/newton/config"
 	"github.com/purak/newton/log"
+	psrv "github.com/purak/newton/proto/partition"
+	"golang.org/x/net/context"
 )
 
-const CLOCK_MONOTONIC_RAW uintptr = 4
+const ClockMonotonicRaw uintptr = 4
 
 type Partition struct {
 	config            *config.DHT
-	httpServer        *graceful.Server
-	httpTransport     *http.Transport
-	httpClient        *http.Client
+	partitionSrv      *grpc.Server
 	birthdate         int64
 	members           *members
 	unicastSocket     *net.UDPConn
 	serverErrGr       errgroup.Group
 	requestWG         sync.WaitGroup
 	waitGroup         sync.WaitGroup
-	table             *partitionTable
+	table             *psrv.PartitionTable
 	suspiciousMembers *suspiciousMembers
 	StartChan         chan struct{}
 	StopChan          chan struct{}
@@ -49,28 +43,24 @@ type Partition struct {
 
 func clockMonotonicRaw() int64 {
 	var ts syscall.Timespec
-	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, CLOCK_MONOTONIC_RAW, uintptr(unsafe.Pointer(&ts)), 0)
+	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, ClockMonotonicRaw, uintptr(unsafe.Pointer(&ts)), 0)
 	sec, nsec := ts.Unix()
 	return time.Unix(sec, nsec).UnixNano()
 }
 
 func New(c *config.DHT) (*Partition, error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	pTable := &partitionTable{
-		Partition: make(map[int]string),
-		Members:   make(map[string][]int),
-		Sorted:    []memberSort{},
-	}
 	sMembers := &suspiciousMembers{
 		m: make(map[string]struct{}),
 	}
 
+	pTable := &psrv.PartitionTable{
+		Partitions: make(map[int32]string),
+		Members:    make(map[string]*psrv.PartitionsOfMember),
+		Sorted:     []*psrv.Member{},
+	}
+
 	p := &Partition{
 		config:            c,
-		httpTransport:     tr,
-		httpClient:        &http.Client{Transport: tr},
 		birthdate:         time.Now().UnixNano(),
 		members:           newMembers(),
 		table:             pTable,
@@ -85,6 +75,7 @@ func New(c *config.DHT) (*Partition, error) {
 	return p, nil
 }
 
+/*
 func (p *Partition) checkHTTPAliveness(httpStarted chan struct{}) {
 	defer p.waitGroup.Done()
 
@@ -118,24 +109,28 @@ func (p *Partition) checkHTTPAliveness(httpStarted chan struct{}) {
 			return
 		}
 	}
-}
+}*/
 
-func (p *Partition) runHTTPServerAtBackground(httpStarted chan struct{}) error {
-	p.waitGroup.Add(1)
-	go p.checkHTTPAliveness(httpStarted)
-
-	log.Infof("Partition manager listens %s", p.config.Listen)
-	err := p.httpServer.ListenAndServeTLS(p.config.CertFile, p.config.KeyFile)
+func (p *Partition) runPartitionService() error {
+	ln, err := net.Listen("tcp", p.config.Listen)
+	if err != nil {
+		return err
+	}
+	p.partitionSrv = grpc.NewServer()
+	psrv.RegisterPartitionServer(p.partitionSrv, p)
+	log.Infof("Partition manager runs on %s", p.config.Listen)
+	err = p.partitionSrv.Serve(ln)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
-			log.Debugf("Something wrong with HTTP/2 server: %s", err)
+			log.Debugf("Something wrong with gRPC server: %s", err)
 			// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
 			// This block can be invoked during normal closing process but Close method will handle
 			// redundant Close call.
 			p.Close()
+			return err
 		}
-		log.Errorf("Error while running HTTP/2 server on %s: %s", p.config.Listen, err)
-		return err
+		// It's just like this: "accept tcp [::]:10000: use of closed network connection". Ignore it.
+		return nil
 	}
 	return nil
 }
@@ -147,29 +142,11 @@ func (p *Partition) Run() error {
 		close(p.StopChan)
 	}()
 
-	router := httprouter.New()
-	router.HEAD("/aliveness", p.alivenessHandler)
-	router.GET("/aliveness", p.alivenessHandler)
-	router.POST("/partition-table/set", p.partitionSetHandler)
-	router.POST("/check-member", p.checkMemberHandler)
-	s := &http.Server{
-		Addr:    p.config.Listen,
-		Handler: router,
-	}
-	http2.ConfigureServer(s, nil)
-	p.httpServer = &graceful.Server{
-		NoSignalHandling: true,
-		Server:           s,
-	}
-
-	httpStarted := make(chan struct{})
-	// TODO: We must close HTTP server if something went wrong in this function.
 	p.serverErrGr.Go(func() error {
-		return p.runHTTPServerAtBackground(httpStarted)
+		return p.runPartitionService()
 	})
 
 	// TODO: We may need to set a timer and return about an error about timeout?
-	<-httpStarted
 
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
@@ -216,13 +193,7 @@ func (p *Partition) Run() error {
 	// Wait until background workers has been closed.
 	p.waitGroup.Wait()
 
-	// Try to close HTTP server
-	stopChan := p.httpServer.StopChan()
-	p.httpServer.Stop(1 * time.Second) // http server
-	select {
-	case <-time.After(2 * time.Second):
-	case <-stopChan:
-	}
+	p.partitionSrv.GracefulStop()
 
 	// Now, close UDP server
 	close(p.closeUDPChan)

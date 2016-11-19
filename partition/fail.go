@@ -1,19 +1,17 @@
 package partition
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
+	"context"
 	"time"
 
 	"github.com/purak/newton/log"
+
+	psrv "github.com/purak/newton/proto/partition"
 )
 
 func (p *Partition) getCoordinatorMember() string {
 	items := p.sortMembersByAge()
-	return items[0].Addr
+	return items[0].Address
 }
 
 func (p *Partition) splitBrainDetection() {
@@ -85,37 +83,17 @@ func (p *Partition) takeOverCluster(cAddr string) {
 }
 
 func (p *Partition) checkMember(cAddr string) (int64, error) {
-	dst := url.URL{
-		Scheme: "https",
-		Host:   cAddr,
-		Path:   "/aliveness",
-	}
-	req, err := http.NewRequest("GET", dst.String(), nil)
+	m, err := p.getMember(cAddr)
 	if err != nil {
 		return 0, err
 	}
-
-	c := &http.Client{
-		Transport: p.httpTransport,
-		Timeout:   500 * time.Millisecond,
-	}
-	res, err := c.Do(req)
+	conn := m.getConn()
+	c := psrv.NewPartitionClient(conn)
+	r, err := c.Aliveness(context.Background(), &psrv.Dummy{})
 	if err != nil {
 		return 0, err
 	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("Member returned HTTP %d", res.StatusCode)
-	}
-	msg := &AlivenessMsg{}
-	if err := json.NewDecoder(res.Body).Decode(msg); err != nil {
-		return 0, err
-	}
-	return msg.Birthdate, nil
-}
-
-type CheckMember struct {
-	Member string `json:"member"`
+	return r.Birthdate, nil
 }
 
 func (p *Partition) notifyCoordinator(addr string) error {
@@ -126,33 +104,17 @@ func (p *Partition) notifyCoordinator(addr string) error {
 		return nil
 	}
 
-	dst := url.URL{
-		Scheme: "https",
-		Host:   cAddr,
-		Path:   "/check-member",
-	}
-	cm := CheckMember{
-		Member: addr,
-	}
-	b := new(bytes.Buffer)
-	json.NewEncoder(b).Encode(cm)
-	req, err := http.NewRequest("POST", dst.String(), b)
+	m, err := p.getMember(cAddr)
 	if err != nil {
 		return err
 	}
-	c := &http.Client{
-		Transport: p.httpTransport,
-		Timeout:   500 * time.Millisecond,
+	conn := m.getConn()
+	c := psrv.NewPartitionClient(conn)
+	req := &psrv.DenunciateRequest{
+		Address: cAddr,
 	}
-	res, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("Coordinator returned HTTP %d", res.StatusCode)
-	}
-	return nil
+	_, err = c.DenunciateForMember(context.Background(), req)
+	return err
 }
 
 func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
@@ -182,7 +144,7 @@ func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
 	// TODO: Rearrangements in partition table and backups will be implemented in the future.
 	partitionTableLock.Lock()
 	for i, item := range p.table.Sorted {
-		if item.Addr != addr {
+		if item.Address != addr {
 			continue
 		}
 		p.table.Sorted = append(p.table.Sorted[:i], p.table.Sorted[i+1:]...)
