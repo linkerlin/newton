@@ -100,7 +100,7 @@ func (p *Partition) notifyCoordinator(addr string) error {
 	cAddr := p.getCoordinatorMemberFromPartitionTable()
 	if cAddr == p.config.Address {
 		// That's me.
-		p.tryCheckSuspiciousMember(cAddr)
+		p.tryCheckSuspiciousMember(addr)
 		return nil
 	}
 
