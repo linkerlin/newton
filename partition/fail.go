@@ -111,7 +111,7 @@ func (p *Partition) notifyCoordinator(addr string) error {
 	conn := m.getConn()
 	c := psrv.NewPartitionClient(conn)
 	req := &psrv.DenunciateRequest{
-		Address: cAddr,
+		Address: addr,
 	}
 	_, err = c.DenunciateForMember(context.Background(), req)
 	return err
