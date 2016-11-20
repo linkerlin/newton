@@ -53,7 +53,7 @@ var (
 
 // Newton represents a new instance.
 type Newton struct {
-	partitionManager       *partition.Partition
+	partition              *partition.Partition
 	nodeID                 string
 	dataTransferRate       float64
 	dataTransferBurstLimit int64
@@ -106,7 +106,7 @@ func New(cfg *config.Config) (*Newton, error) {
 	}
 
 	n := &Newton{
-		partitionManager:       partman,
+		partition:              partman,
 		dataTransferRate:       float64(rate),
 		dataTransferBurstLimit: int64(burstLimit),
 		writeTimeout:           writeTimeout,
@@ -168,8 +168,13 @@ var ErrTimeout = errors.New("Timeout exceeded")
 
 // Start starts a new Newton server instance and blocks until the server is closed.
 func (n *Newton) Start() error {
-	log.Infof("Starting Newton instance with PID: %d, runtime: %s", os.Getpid(), runtime.Version())
+	srv := n.createGracefulServer()
+	// Wait for SIGTERM or SIGINT
+	go n.waitForInterrupt(srv)
 
+	log.Infof("Starting Newton instance with PID: %d, runtime: %s", os.Getpid(), runtime.Version())
+	// First, we need to start a gRPC instance to register internal
+	// gRPC services: Partition, KeyValue store and etc.
 	g, err := newInternalGRPC(n.config.GrpcListen)
 	if err != nil {
 		return err
@@ -187,22 +192,19 @@ func (n *Newton) Start() error {
 		// Run as usual.
 	}
 
+	// Start a partition manager service at background
 	n.errGroup.Go(func() error {
-		psrv.RegisterPartitionServer(g.server, n.partitionManager)
-		// Start a new partition manager instance.
-		return n.partitionManager.Start()
+		psrv.RegisterPartitionServer(g.server, n.partition)
+		return n.partition.Start()
 	})
 
 	select {
-	case <-n.partitionManager.StartChan:
-	case <-n.partitionManager.StopChan:
+	case <-n.partition.StartChan:
+	case <-n.partition.StopChan:
 		return n.errGroup.Wait()
 	}
 
-	srv := n.createGracefulServer()
-	// Wait for SIGTERM or SIGINT
-	go n.waitForInterrupt(srv)
-
+	// Finally we can start an external HTTP/2 service to process incoming requests.
 	n.errGroup.Go(func() error {
 		log.Info("Listening HTTP/2 connections on ", n.config.Listen)
 		err := srv.ListenAndServeTLS(n.config.CertFile, n.config.KeyFile)
@@ -228,9 +230,9 @@ func (n *Newton) Start() error {
 	log.Info("HTTP server has been stopped.")
 
 	// Stop partition manager instance
-	n.partitionManager.Stop()
+	n.partition.Stop()
 	select {
-	case <-n.partitionManager.StopChan:
+	case <-n.partition.StopChan:
 	case <-time.After(newtonGracePeriod):
 		log.Warn("Some goroutines did not finish in grace period. They will be killed.")
 	}
