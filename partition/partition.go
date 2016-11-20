@@ -75,43 +75,43 @@ func New(c *config.DHT) (*Partition, error) {
 	return p, nil
 }
 
-/*
-func (p *Partition) checkHTTPAliveness(httpStarted chan struct{}) {
+func (p *Partition) checkgRPCAliveness(gRPCStarted chan struct{}) {
 	defer p.waitGroup.Done()
 
-	dst := url.URL{
-		Scheme: "https",
-		Host:   p.config.Listen,
-		Path:   "/aliveness",
+	callYourself := func() error { // Set up a connection to the server.
+		conn, err := grpc.Dial(p.config.Listen, grpc.WithInsecure())
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := conn.Close(); err != nil {
+				log.Errorf("Error while closing connection: %s", err)
+			}
+		}()
+		c := psrv.NewPartitionClient(conn)
+		_, err = c.Aliveness(context.Background(), &psrv.Dummy{})
+		if err != nil {
+			return err
+		}
+		return nil
 	}
+
 	for {
 		select {
 		case <-time.After(50 * time.Millisecond):
-			req, err := http.NewRequest("HEAD", dst.String(), nil)
-			if err != nil {
-				log.Errorf("Error while creating new request: ", err)
+			if err := callYourself(); err != nil {
+				log.Errorf("Error while checking gRPC server: %s", err)
 				continue
 			}
-			res, err := p.httpClient.Do(req)
-			if err != nil {
-				// Probably "connection refused"
-				log.Debugf("Error while checking aliveness: %s", err)
-			}
-			if err := res.Body.Close(); err != nil {
-				log.Debugf("Error while checking aliveness: %s", err)
-			}
-
-			if res.StatusCode == http.StatusOK {
-				close(httpStarted)
-				return
-			}
+			close(gRPCStarted)
+			return
 		case <-p.done:
 			return
 		}
 	}
-}*/
+}
 
-func (p *Partition) runPartitionService() error {
+func (p *Partition) runPartitionService(gRPCStarted chan struct{}) error {
 	ln, err := net.Listen("tcp", p.config.Listen)
 	if err != nil {
 		return err
@@ -119,6 +119,10 @@ func (p *Partition) runPartitionService() error {
 	p.partitionSrv = grpc.NewServer()
 	psrv.RegisterPartitionServer(p.partitionSrv, p)
 	log.Infof("Partition manager runs on %s", p.config.Listen)
+
+	p.waitGroup.Add(1)
+	go p.checkgRPCAliveness(gRPCStarted)
+
 	err = p.partitionSrv.Serve(ln)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
@@ -142,11 +146,13 @@ func (p *Partition) Run() error {
 		close(p.StopChan)
 	}()
 
+	gRPCStarted := make(chan struct{})
 	p.serverErrGr.Go(func() error {
-		return p.runPartitionService()
+		return p.runPartitionService(gRPCStarted)
 	})
 
 	// TODO: We may need to set a timer and return about an error about timeout?
+	<-gRPCStarted
 
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
