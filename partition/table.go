@@ -41,11 +41,33 @@ func (p *Partition) createPartitionTable() {
 			}
 		}
 		parts.Partitions = append(parts.Partitions, partID)
+
 		p.table.Members[m.Address] = parts
 		p.table.Partitions[partID] = m.Address
 		partID++
 	}
 	p.table.Sorted = sorted
+
+	// Setup backup logic in consistent hashing logic.
+	p.table.Backups = make(map[int32]string)
+	p.table.BackupPartitionsOfMember = make(map[string]*psrv.BackupPartitionsOfMember)
+	for idx, item := range p.table.Sorted {
+		next := int32(idx + 1)
+		if next >= memberCount {
+			next = 0
+		}
+		// Get the next item, it's the backup node of the current one.
+		nextItem := p.table.Sorted[next]
+		// Copy integers
+		backups := &psrv.BackupPartitionsOfMember{
+			Partitions: []int32{},
+		}
+		for _, i := range p.table.Members[item.Address].Partitions {
+			backups.Partitions = append(backups.Partitions, i)
+			p.table.Backups[i] = nextItem.Address
+		}
+		p.table.BackupPartitionsOfMember[nextItem.Address] = backups
+	}
 
 	if memberCount > 1 {
 		if err := p.pushPartitionTable(); err != nil {

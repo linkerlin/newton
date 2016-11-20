@@ -29,8 +29,14 @@ message PartitionsOfMember {
     repeated int32 partitions = 1;
 }
 
+message BackupPartitionsOfMember {
+    repeated int32 partitions = 1;
+}
+
 message PartitionTable { 
   map<int32, string> partitions = 1;
   map<string, PartitionsOfMember> members = 2;
-  repeated Member sorted = 3;
+  map<int32, string> backups = 3;
+  map<string, BackupPartitionsOfMember> backupPartitionsOfMember = 4;
+  repeated Member sorted = 5;
 }
