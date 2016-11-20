@@ -139,6 +139,8 @@ func (p *Partition) checkSuspiciousMember(addr string, birthdate int64) {
 		if bd == birthdate {
 			return
 		}
+		log.Infof("%s propagates a different birth date. It will be removed from the cluster.", addr)
+		break
 	}
 	// Remove from partition table
 	// TODO: Rearrangements in partition table and backups will be implemented in the future.
