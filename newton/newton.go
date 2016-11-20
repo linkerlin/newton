@@ -16,7 +16,6 @@ package newton
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -179,9 +178,6 @@ func (n *Newton) Start() error {
 	case <-n.partitions.StartChan:
 	case <-n.partitions.StopChan:
 		return n.errGroup.Wait()
-	case <-time.After(5 * time.Second):
-		log.Error("Partition manage could not be started. Timeout exceeded.")
-		return errors.New("timeout")
 	}
 
 	n.errGroup.Go(func() error {
