@@ -3,6 +3,7 @@ package partition
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -139,6 +140,8 @@ func (p *Partition) runPartitionService(gRPCStarted chan struct{}) error {
 	return nil
 }
 
+var ErrTimeout = errors.New("Timeout exceeded")
+
 // Run fires up a new partition table.
 func (p *Partition) Run() error {
 	defer func() {
@@ -151,16 +154,27 @@ func (p *Partition) Run() error {
 		return p.runPartitionService(gRPCStarted)
 	})
 
-	// TODO: We may need to set a timer and return about an error about timeout?
-	<-gRPCStarted
+	select {
+	case <-time.After(5 * time.Second):
+		log.Warn("gRPC server could not be started. Quitting.")
+		return ErrTimeout
+	case <-gRPCStarted:
+		// Run as usual.
+	}
 
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
 	}
 
-	// Start background workers after the UDP server has been started.
-	<-p.listening
+	select {
+	case <-time.After(5 * time.Second):
+		log.Warn("UDP server could not be started. Quitting.")
+		return ErrTimeout
+	case <-p.listening:
+		// Run as usual.
+	}
 
+	// Start background workers after the UDP server has been started.
 	buf := new(bytes.Buffer)
 	if err := buf.WriteByte(joinMessageFlag); err != nil {
 		return err
