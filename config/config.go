@@ -32,6 +32,7 @@ const (
 // Newton contains configuration items which are related to Newton server.
 type Newton struct {
 	Common
+	GrpcListen             string   `yaml:"grpcListen"`
 	Address                string   `yaml:"address"`
 	Listen                 string   `yaml:"listen"`
 	ReadTimeout            string   `yaml:"read_timeout"`
@@ -53,17 +54,11 @@ type Newton struct {
 }
 
 // DHT contains configuration items which are related to DHT node.
-type DHT struct {
+type Partition struct {
 	Common
 	Multicast
 	Unicast
-	Address             string `yaml:"address"`
-	Listen              string `yaml:"listen"`
-	Identifier          string `yaml:"identifier"`
-	PeerCheckInterval   int64  `yaml:"peerCheckInterval"`
-	InactivityThreshold int64  `yaml:"inactivityThreshold"`
-	CertFile            string `yaml:"certFile"`
-	KeyFile             string `yaml:"keyFile"`
+	Address string `yaml:"address"`
 }
 
 type Multicast struct {
@@ -73,8 +68,8 @@ type Multicast struct {
 }
 
 type Unicast struct {
-	Peers             []string `yaml:"peers"`
-	DiscoveryInterval string   `yaml:"discoveryInterval"`
+	Listen  string   `yaml:"listen"`
+	Members []string `yaml:"members"`
 }
 
 // Common ships common configuration parameters.
@@ -87,7 +82,7 @@ type Common struct {
 type Config struct {
 	Common
 	Newton
-	DHT
+	Partition
 	Unicast
 	Multicast
 }
@@ -111,9 +106,10 @@ func New(path string) (*Config, error) {
 		return nil, err
 	}
 	// This seems a bit hacky but it's absolutely worth.
+	c.Unicast.Listen = c.Newton.GrpcListen
 	c.Newton.Common = c.Common
-	c.DHT.Common = c.Common
-	c.DHT.Unicast = c.Unicast
-	c.DHT.Multicast = c.Multicast
+	c.Partition.Common = c.Common
+	c.Partition.Unicast = c.Unicast
+	c.Partition.Multicast = c.Multicast
 	return &c, nil
 }

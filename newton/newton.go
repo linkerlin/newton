@@ -16,6 +16,7 @@ package newton
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,6 +41,8 @@ import (
 	"github.com/purak/newton/log"
 	"github.com/purak/newton/partition"
 	"github.com/purak/newton/store"
+
+	psrv "github.com/purak/newton/proto/partition"
 )
 
 var (
@@ -50,8 +53,8 @@ var (
 
 // Newton represents a new instance.
 type Newton struct {
+	partitionManager       *partition.Partition
 	nodeID                 string
-	router                 *httprouter.Router
 	dataTransferRate       float64
 	dataTransferBurstLimit int64
 	writeTimeout           time.Duration
@@ -59,7 +62,6 @@ type Newton struct {
 	config                 *config.Newton
 	messageIDStore         *messageIDStore
 	clientStore            ClientStore
-	partitions             *partition.Partition
 	waitGroup              sync.WaitGroup
 	errGroup               errgroup.Group
 	done                   chan struct{}
@@ -92,18 +94,19 @@ func New(cfg *config.Config) (*Newton, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %s", spth, err)
 	}
-	router := httprouter.New()
-	partman, err := partition.New(&cfg.DHT)
-	if err != nil {
-		return nil, err
-	}
+
 	messageIDStore, err := newMessageIDStore(str)
 	if err != nil {
 		return nil, err
 	}
+
+	partman, err := partition.New(&cfg.Partition)
+	if err != nil {
+		return nil, err
+	}
+
 	n := &Newton{
-		router:                 router,
-		partitions:             partman,
+		partitionManager:       partman,
 		dataTransferRate:       float64(rate),
 		dataTransferBurstLimit: int64(burstLimit),
 		writeTimeout:           writeTimeout,
@@ -161,24 +164,44 @@ func (n *Newton) createGracefulServer() *graceful.Server {
 
 }
 
+var ErrTimeout = errors.New("Timeout exceeded")
+
 // Start starts a new Newton server instance and blocks until the server is closed.
 func (n *Newton) Start() error {
+	log.Infof("Starting Newton instance with PID: %d, runtime: %s", os.Getpid(), runtime.Version())
+
+	g, err := newInternalGRPC(n.config.GrpcListen)
+	if err != nil {
+		return err
+	}
+
+	n.errGroup.Go(func() error {
+		return g.start()
+	})
+
+	select {
+	case <-time.After(5 * time.Second):
+		log.Warn("gRPC server could not be started. Quitting.")
+		return ErrTimeout
+	case <-g.startChan:
+		// Run as usual.
+	}
+
+	n.errGroup.Go(func() error {
+		psrv.RegisterPartitionServer(g.server, n.partitionManager)
+		// Start a new partition manager instance.
+		return n.partitionManager.Start()
+	})
+
+	select {
+	case <-n.partitionManager.StartChan:
+	case <-n.partitionManager.StopChan:
+		return n.errGroup.Wait()
+	}
+
 	srv := n.createGracefulServer()
 	// Wait for SIGTERM or SIGINT
 	go n.waitForInterrupt(srv)
-	log.Infof("Starting Newton instance with PID: %d, runtime: %s", os.Getpid(), runtime.Version())
-
-	n.errGroup.Go(func() error {
-		// Fire up DHT instance to map and find clients in Newton network
-		return n.partitions.Run()
-	})
-
-	// Wait for DHT
-	select {
-	case <-n.partitions.StartChan:
-	case <-n.partitions.StopChan:
-		return n.errGroup.Wait()
-	}
 
 	n.errGroup.Go(func() error {
 		log.Info("Listening HTTP/2 connections on ", n.config.Listen)
@@ -204,13 +227,15 @@ func (n *Newton) Start() error {
 	n.waitGroup.Wait()
 	log.Info("HTTP server has been stopped.")
 
-	// Stop DHT instance
-	n.partitions.Close()
+	// Stop partition manager instance
+	n.partitionManager.Stop()
 	select {
-	case <-n.partitions.StopChan:
+	case <-n.partitionManager.StopChan:
 	case <-time.After(newtonGracePeriod):
 		log.Warn("Some goroutines did not finish in grace period. They will be killed.")
 	}
+
+	g.gracefulStop()
 	return n.errGroup.Wait()
 }
 

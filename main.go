@@ -103,7 +103,7 @@ func main() {
 		fmt.Println(msg)
 		return
 	} else if generateIdentifier {
-		// Network identifier is a 16 byte length byte slice for the DHT package that's used
+		// Network identifier is a 16 byte length byte slice for the PartitionManager package that's used
 		// to unify a specific network on the Internet.
 		b := make([]byte, 16)
 		if _, err := rand.Read(b); err != nil {
@@ -138,12 +138,10 @@ func checkConfig(c *config.Config) error {
 		return errors.New("Newton.Listen cannot be empty.")
 	} else if c.DataDir == "" {
 		return errors.New("dataDir cannot be empty.")
-	} else if c.DHT.Multicast.Enabled && c.DHT.Multicast.Address == "" {
-		return errors.New("DHT.Multicast.Address cannot be empty.")
-	} else if c.DHT.Listen == "" {
-		return errors.New("DHT.Unicast.Listen cannot be empty.")
-	} else if c.DHT.Identifier == "" {
-		return errors.New("networkIdentifer cannot be empty.")
+	} else if c.Partition.Multicast.Enabled && c.Partition.Multicast.Address == "" {
+		return errors.New("PartitionManager.Multicast.Address cannot be empty.")
+	} else if c.Partition.Unicast.Listen == "" {
+		return errors.New("PartitionManager.Unicast.Listen cannot be empty.")
 	}
 	// Check for certificate file
 	if c.Newton.CertFile == "" {

@@ -11,8 +11,6 @@ import (
 	"time"
 	"unsafe"
 
-	"google.golang.org/grpc"
-
 	"golang.org/x/sync/errgroup"
 
 	"github.com/purak/newton/config"
@@ -24,8 +22,7 @@ import (
 const ClockMonotonicRaw uintptr = 4
 
 type Partition struct {
-	config            *config.DHT
-	partitionSrv      *grpc.Server
+	config            *config.Partition
 	birthdate         int64
 	members           *members
 	unicastSocket     *net.UDPConn
@@ -49,7 +46,7 @@ func clockMonotonicRaw() int64 {
 	return time.Unix(sec, nsec).UnixNano()
 }
 
-func New(c *config.DHT) (*Partition, error) {
+func New(c *config.Partition) (*Partition, error) {
 	sMembers := &suspiciousMembers{
 		m: make(map[string]struct{}),
 	}
@@ -76,91 +73,14 @@ func New(c *config.DHT) (*Partition, error) {
 	return p, nil
 }
 
-func (p *Partition) checkgRPCAliveness(gRPCStarted chan struct{}) {
-	defer p.waitGroup.Done()
-
-	callYourself := func() error { // Set up a connection to the server.
-		conn, err := grpc.Dial(p.config.Listen, grpc.WithInsecure())
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err := conn.Close(); err != nil {
-				log.Errorf("Error while closing connection: %s", err)
-			}
-		}()
-		c := psrv.NewPartitionClient(conn)
-		_, err = c.Aliveness(context.Background(), &psrv.Dummy{})
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	for {
-		select {
-		case <-time.After(50 * time.Millisecond):
-			if err := callYourself(); err != nil {
-				log.Errorf("Error while checking gRPC server: %s", err)
-				continue
-			}
-			close(gRPCStarted)
-			return
-		case <-p.done:
-			return
-		}
-	}
-}
-
-func (p *Partition) runPartitionService(gRPCStarted chan struct{}) error {
-	ln, err := net.Listen("tcp", p.config.Listen)
-	if err != nil {
-		return err
-	}
-	p.partitionSrv = grpc.NewServer()
-	psrv.RegisterPartitionServer(p.partitionSrv, p)
-	log.Infof("Partition manager runs on %s", p.config.Listen)
-
-	p.waitGroup.Add(1)
-	go p.checkgRPCAliveness(gRPCStarted)
-
-	err = p.partitionSrv.Serve(ln)
-	if err != nil {
-		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
-			log.Debugf("Something wrong with gRPC server: %s", err)
-			// We call Close here because if HTTP/2 server fails, we cannot run this process anymore.
-			// This block can be invoked during normal closing process but Close method will handle
-			// redundant Close call.
-			p.Close()
-			return err
-		}
-		// It's just like this: "accept tcp [::]:10000: use of closed network connection". Ignore it.
-		return nil
-	}
-	return nil
-}
-
 var ErrTimeout = errors.New("Timeout exceeded")
 
 // Run fires up a new partition table.
-func (p *Partition) Run() error {
+func (p *Partition) Start() error {
 	defer func() {
 		log.Info("Partition manager has been stopped.")
 		close(p.StopChan)
 	}()
-
-	gRPCStarted := make(chan struct{})
-	p.serverErrGr.Go(func() error {
-		return p.runPartitionService(gRPCStarted)
-	})
-
-	select {
-	case <-time.After(5 * time.Second):
-		log.Warn("gRPC server could not be started. Quitting.")
-		return ErrTimeout
-	case <-gRPCStarted:
-		// Run as usual.
-	}
 
 	if err := p.listenUnicastUDP(); err != nil {
 		return err
@@ -208,12 +128,11 @@ func (p *Partition) Run() error {
 	p.waitGroup.Add(1)
 	go p.splitBrainDetection()
 
+	log.Infof("Partition manager has been started.")
 	<-p.done
 
 	// Wait until background workers has been closed.
 	p.waitGroup.Wait()
-
-	p.partitionSrv.GracefulStop()
 
 	// Now, close UDP server
 	close(p.closeUDPChan)
@@ -257,7 +176,7 @@ func (p *Partition) tryToJoinCluster(payload []byte) {
 	for {
 		select {
 		case <-ticker.C:
-			for _, addr := range p.config.Unicast.Peers {
+			for _, addr := range p.config.Unicast.Members {
 				addr = strings.Trim(addr, " ")
 				log.Debugf("Sending join message to %s", addr)
 				if err := p.sendMessage(payload, addr); err != nil {
@@ -272,7 +191,7 @@ func (p *Partition) tryToJoinCluster(payload []byte) {
 	}
 }
 
-func (p *Partition) Close() {
+func (p *Partition) Stop() {
 	select {
 	case <-p.done:
 		// Already closed
