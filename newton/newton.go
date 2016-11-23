@@ -38,6 +38,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/julienschmidt/httprouter"
 	"github.com/purak/newton/config"
+	"github.com/purak/newton/kv"
 	"github.com/purak/newton/log"
 	"github.com/purak/newton/partition"
 	"github.com/purak/newton/store"
@@ -53,6 +54,8 @@ var (
 
 // Newton represents a new instance.
 type Newton struct {
+	router                 *httprouter.Router
+	kv                     *kv.KV
 	partition              *partition.Partition
 	nodeID                 string
 	dataTransferRate       float64
@@ -105,7 +108,11 @@ func New(cfg *config.Config) (*Newton, error) {
 		return nil, err
 	}
 
+	router := httprouter.New()
+	kvStore := kv.New(partman, router)
 	n := &Newton{
+		router:                 router,
+		kv:                     kvStore,
 		partition:              partman,
 		dataTransferRate:       float64(rate),
 		dataTransferBurstLimit: int64(burstLimit),
@@ -120,21 +127,20 @@ func New(cfg *config.Config) (*Newton, error) {
 }
 
 func (n *Newton) createGracefulServer() *graceful.Server {
-	router := httprouter.New()
-	router.GET("/events/:name", n.eventsHandler)
-	router.GET("/lookup/:name", n.lookupHandler)
+	n.router.GET("/events/:name", n.eventsHandler)
+	n.router.GET("/lookup/:name", n.lookupHandler)
 
-	router.GET("/read/:name/:clientID/*routingKey", n.readHandler)
-	router.HEAD("/read/:name/:clientID/*routingKey", n.readHandler)
-	router.POST("/write-with-id/:messageID", n.messageIDHandler)
+	n.router.GET("/read/:name/:clientID/*routingKey", n.readHandler)
+	n.router.HEAD("/read/:name/:clientID/*routingKey", n.readHandler)
+	n.router.POST("/write-with-id/:messageID", n.messageIDHandler)
 
-	router.POST("/write/:name/:clientID/*routingKey", n.writeHandler)
-	router.GET("/read-with-id/:messageID", n.messageIDHandler)
+	n.router.POST("/write/:name/:clientID/*routingKey", n.writeHandler)
+	n.router.GET("/read-with-id/:messageID", n.messageIDHandler)
 
-	router.POST("/close/:messageID/:returnCode", n.closeHandler)
+	n.router.POST("/close/:messageID/:returnCode", n.closeHandler)
 
 	ah := &AuthHandler{
-		Handler:     handlers.RecoveryHandler()(router),
+		Handler:     handlers.RecoveryHandler()(n.router),
 		callbackURL: n.config.AuthCallbackUrl,
 	}
 

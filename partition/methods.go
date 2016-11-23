@@ -61,6 +61,7 @@ func (p *Partition) SetPartitionTable(ctx context.Context, table *psrv.Partition
 		}
 	default:
 	}
+
 	log.Infof("Partition table received from coordinator node: %s", table.Sorted[0].Address)
 	p.table = table
 
@@ -110,7 +111,6 @@ func (p *Partition) SetPartitionTable(ctx context.Context, table *psrv.Partition
 	default:
 	}
 	close(p.nodeInitialized)
-	return &psrv.Dummy{}, nil
 
 	return &psrv.Dummy{}, nil
 }
