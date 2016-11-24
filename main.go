@@ -15,8 +15,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -31,7 +29,7 @@ import (
 	"github.com/purak/newton/newton"
 )
 
-var usage = `newton -- HTTP-based RPC combined with service discovery.
+var usage = `newton -- In-Memory Distributed Data Grid
 
 Usage: newton [options] ...
 
@@ -45,9 +43,6 @@ Options:
   -c -config                    
       Sets configuration file path. Default is /etc/newton.conf. 
       Set NEWTON_CONFIG to overwrite it.
-
-  -generateIdentifier           
-      Generates an 16 bit hexadecimal string as identifier.
 
   -log.format 
       If set use a syslog logger or JSON logging. Example: 
@@ -84,7 +79,6 @@ func main() {
 	f.BoolVar(&showHelp, "help", false, "")
 	f.BoolVar(&showVersion, "version", false, "")
 	f.BoolVar(&showVersion, "v", false, "")
-	f.BoolVar(&generateIdentifier, "generateIdentifier", false, "")
 	f.StringVar(&path, "config", config.ConfigFile, "")
 	f.StringVar(&path, "c", config.ConfigFile, "")
 
@@ -96,20 +90,11 @@ func main() {
 	}
 
 	if showVersion {
-		fmt.Println("newton version ", releaseVersion)
+		fmt.Println("This is Newton", releaseVersion)
 		return
 	} else if showHelp {
 		msg := fmt.Sprintf(usage, runtime.Version())
 		fmt.Println(msg)
-		return
-	} else if generateIdentifier {
-		// Network identifier is a 16 byte length byte slice for the PartitionManager package that's used
-		// to unify a specific network on the Internet.
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err != nil {
-			log.Fatal("Error while generating network identifier: ", err)
-		}
-		log.Info("Random network identifier: ", hex.EncodeToString(b))
 		return
 	}
 	c, err := config.New(path)
