@@ -40,3 +40,6 @@
 [submodule "vendor/github.com/golang/protobuf"]
 	path = vendor/github.com/golang/protobuf
 	url = https://github.com/golang/protobuf
+[submodule "vendor/github.com/spaolacci/murmur3"]
+	path = vendor/github.com/spaolacci/murmur3
+	url = https://github.com/spaolacci/murmur3
