@@ -7,9 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"golang.org/x/sync/errgroup"
 
@@ -18,8 +16,6 @@ import (
 	psrv "github.com/purak/newton/proto/partition"
 	"golang.org/x/net/context"
 )
-
-const ClockMonotonicRaw uintptr = 4
 
 type Partition struct {
 	config            *config.Partition
@@ -37,13 +33,6 @@ type Partition struct {
 	closeUDPChan      chan struct{}
 	nodeInitialized   chan struct{}
 	done              chan struct{}
-}
-
-func clockMonotonicRaw() int64 {
-	var ts syscall.Timespec
-	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, ClockMonotonicRaw, uintptr(unsafe.Pointer(&ts)), 0)
-	sec, nsec := ts.Unix()
-	return time.Unix(sec, nsec).UnixNano()
 }
 
 func New(c *config.Partition) (*Partition, error) {
