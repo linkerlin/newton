@@ -33,8 +33,11 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 		partman:    p,
 		partitions: parts,
 	}
+
 	router.POST("/kv/set/:key", k.setHandler)
+	router.PUT("/kv/set/:key", k.setHandler)
 	router.GET("/kv/get/:key", k.getHandler)
+	router.DELETE("/kv/delete/:key", k.deleteHandler)
 	return k
 }
 

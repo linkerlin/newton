@@ -39,3 +39,14 @@ func (k *KV) getHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	}
 	log.Debugf("%d bytes has been written to network socket for key: %s", nr, key)
 }
+
+func (k *KV) deleteHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	key := ps.ByName("key")
+
+	err := k.Delete(key)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Debugf("%s has been deleted", key)
+}
