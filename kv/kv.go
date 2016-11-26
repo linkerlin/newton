@@ -42,15 +42,49 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 }
 
 func (k *KV) Set(key string, value []byte) error {
-	return k.partitions.set(key, value)
+	// Find partition number for the given key
+	partID := getPartitionID(key)
+	_, local, err := k.partman.FindResponsibleMember(partID)
+	if err != nil {
+		return err
+	}
+	if local {
+		item := k.partitions.set(key, value, partID)
+		defer item.mu.Unlock()
+		// TODO: set the key to backups
+		return nil
+	}
+	// TODO: write the key through gRPC endpoint to responsible node.
+	return nil
 }
 
 func (k *KV) Get(key string) ([]byte, error) {
-	return k.partitions.get(key)
+	// Find partition number for the given key
+	partID := getPartitionID(key)
+	_, local, err := k.partman.FindResponsibleMember(partID)
+	if err != nil {
+		return nil, err
+	}
+	if local {
+		return k.partitions.get(key, partID)
+	}
+	// TODO: get the key via gRPC endpoint to responsible node.
+	return nil, nil
+
 }
 
 func (k *KV) Delete(key string) error {
-	return k.partitions.delete(key)
+	// Find partition number for the given key
+	partID := getPartitionID(key)
+	_, local, err := k.partman.FindResponsibleMember(partID)
+	if err != nil {
+		return err
+	}
+	if local {
+		return k.partitions.delete(key, partID)
+	}
+	// TODO delete the key from cluster via gRPC endpoint
+	return nil
 }
 
 func (k *KV) Stop() {

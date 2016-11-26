@@ -15,8 +15,9 @@ import (
 const partitionCount int32 = 23
 
 var (
-	partitionTableLock   sync.RWMutex
-	errPartitionTableSet = errors.New("Failed to set partition table")
+	partitionTableLock    sync.RWMutex
+	errPartitionTableSet  = errors.New("Failed to set partition table")
+	ErrInvalidPartitionID = errors.New("Invalid partition ID")
 )
 
 func (p *Partition) createPartitionTable() {
@@ -135,4 +136,17 @@ func (p *Partition) getCoordinatorMemberFromPartitionTable() string {
 		return ""
 	}
 	return p.table.Sorted[0].Address
+}
+
+func (p *Partition) FindResponsibleMember(partID int32) (string, bool, error) {
+	partitionTableLock.RLock()
+	defer partitionTableLock.RUnlock()
+	rm, ok := p.table.Partitions[partID]
+	if !ok {
+		return "", false, ErrInvalidPartitionID
+	}
+	if rm == p.config.Address {
+		return rm, true, nil
+	}
+	return rm, false, nil
 }
