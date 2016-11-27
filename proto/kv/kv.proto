@@ -9,11 +9,11 @@ service KV {
   
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}
 
- // rpc GetBackup(GetRequest) returns (GetResponse) {}
+  rpc GetBackup(GetRequest) returns (GetResponse) {}
 
- // rpc SetSetBackup(SetRequest) returns (SetResponse) {}
+  rpc SetBackup(SetRequest) returns (SetResponse) {}
   
- // rpc DeleteBackup(DeleteRequest) returns (DeleteResponse) {}
+  rpc DeleteBackup(DeleteRequest) returns (DeleteResponse) {}
 }
 
 message GetRequest {

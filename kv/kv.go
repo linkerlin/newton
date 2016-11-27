@@ -61,19 +61,23 @@ func (k *KV) Stop() {
 func (k *KV) Set(key string, value []byte) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindResponsibleMember(partID)
+	rAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return err
 	}
 	if local {
 		item := k.partitions.set(key, value, partID)
 		defer item.mu.Unlock()
-		ms, err := k.partman.FindBackupMembers(partID)
+		ms, err := k.partman.FindBackupOwners(partID)
 		if err != nil {
 			return err
 		}
 		for _, bAddr := range ms {
-			log.Debugf("Setting backup for %s on %s", key, bAddr)
+			log.Debugf("Calling SetBackup for %s on %s", key, bAddr)
+			if err := k.callSetBackupOn(bAddr, key, value); err != nil {
+				// TODO: What about stale items in kv?
+				return err
+			}
 		}
 		return nil
 	}
@@ -99,7 +103,7 @@ func (k *KV) Set(key string, value []byte) error {
 func (k *KV) Get(key string) ([]byte, error) {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindResponsibleMember(partID)
+	rAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +113,6 @@ func (k *KV) Get(key string) ([]byte, error) {
 	// Redirect the request to responsible node.
 	conn, err := k.partman.GetMemberConn(rAddr)
 	if err != nil {
-		// TODO: Do we need to remove stale item explicitly from kv?
 		return nil, err
 	}
 	c := ksrv.NewKVClient(conn)
@@ -127,18 +130,30 @@ func (k *KV) Get(key string) ([]byte, error) {
 func (k *KV) Delete(key string) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindResponsibleMember(partID)
+	rAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return err
 	}
 	if local {
-		return k.partitions.delete(key, partID)
+		if err := k.partitions.delete(key, partID); err != nil {
+			return err
+		}
+		ms, err := k.partman.FindBackupOwners(partID)
+		if err != nil {
+			return err
+		}
+		for _, bAddr := range ms {
+			log.Debugf("Calling DeleteBackup for %s on %s", key, bAddr)
+			if err := k.callDeleteBackupOn(bAddr, key); err != nil {
+				// TODO: What about stale items in kv?
+				return err
+			}
+		}
 	}
 
 	// Redirect the request to responsible node.
 	conn, err := k.partman.GetMemberConn(rAddr)
 	if err != nil {
-		// TODO: Do we need to remove stale item explicitly from kv?
 		return err
 	}
 	c := ksrv.NewKVClient(conn)

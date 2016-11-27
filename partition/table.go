@@ -138,7 +138,7 @@ func (p *Partition) getCoordinatorMemberFromPartitionTable() string {
 	return p.table.Sorted[0].Address
 }
 
-func (p *Partition) FindResponsibleMember(partID int32) (string, bool, error) {
+func (p *Partition) FindPartitionOwner(partID int32) (string, bool, error) {
 	partitionTableLock.RLock()
 	defer partitionTableLock.RUnlock()
 	rm, ok := p.table.Partitions[partID]
@@ -151,7 +151,7 @@ func (p *Partition) FindResponsibleMember(partID int32) (string, bool, error) {
 	return rm, false, nil
 }
 
-func (p *Partition) FindBackupMembers(partID int32) ([]string, error) {
+func (p *Partition) FindBackupOwners(partID int32) ([]string, error) {
 	partitionTableLock.RLock()
 	defer partitionTableLock.RUnlock()
 	b, ok := p.table.Backups[partID]
@@ -160,4 +160,18 @@ func (p *Partition) FindBackupMembers(partID int32) ([]string, error) {
 	}
 	// TODO: backup arrangement algorithm doesn't implemented yet.
 	return []string{b}, nil
+}
+
+func (p *Partition) AmIBackupOwner(partID int32) (bool, error) {
+	mm, err := p.FindBackupOwners(partID)
+	if err != nil {
+		return false, err
+	}
+
+	for _, mAddr := range mm {
+		if mAddr == p.config.Address {
+			return true, nil
+		}
+	}
+	return false, nil
 }

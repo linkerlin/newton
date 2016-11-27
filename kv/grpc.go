@@ -34,3 +34,29 @@ func (g *Grpc) Delete(ctx context.Context, in *ksrv.DeleteRequest) (*ksrv.Delete
 	}
 	return &ksrv.DeleteResponse{}, nil
 }
+
+func (g *Grpc) SetBackup(ctx context.Context, in *ksrv.SetRequest) (*ksrv.SetResponse, error) {
+	err := g.kv.SetBackup(in.Key, in.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &ksrv.SetResponse{}, nil
+}
+
+func (g *Grpc) GetBackup(ctx context.Context, in *ksrv.GetRequest) (*ksrv.GetResponse, error) {
+	value, err := g.kv.GetBackup(in.Key)
+	if err != nil {
+		return nil, err
+	}
+	return &ksrv.GetResponse{
+		Value: value,
+	}, nil
+}
+
+func (g *Grpc) DeleteBackup(ctx context.Context, in *ksrv.DeleteRequest) (*ksrv.DeleteResponse, error) {
+	err := g.kv.DeleteBackup(in.Key)
+	if err != nil {
+		return nil, err
+	}
+	return &ksrv.DeleteResponse{}, nil
+}
