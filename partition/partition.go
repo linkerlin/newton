@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/purak/newton/config"
@@ -178,6 +180,15 @@ func (p *Partition) tryToJoinCluster(payload []byte) {
 			return
 		}
 	}
+}
+
+func (p *Partition) GetMemberConn(address string) (*grpc.ClientConn, error) {
+	m, err := p.getMember(address)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: What about connection health?
+	return m.getConn(), nil
 }
 
 func (p *Partition) Stop() {

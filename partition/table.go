@@ -150,3 +150,14 @@ func (p *Partition) FindResponsibleMember(partID int32) (string, bool, error) {
 	}
 	return rm, false, nil
 }
+
+func (p *Partition) FindBackupMembers(partID int32) ([]string, error) {
+	partitionTableLock.RLock()
+	defer partitionTableLock.RUnlock()
+	b, ok := p.table.Backups[partID]
+	if !ok {
+		return nil, ErrInvalidPartitionID
+	}
+	// TODO: backup arrangement algorithm doesn't implemented yet.
+	return []string{b}, nil
+}

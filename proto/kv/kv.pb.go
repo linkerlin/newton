@@ -146,8 +146,8 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for KV service
 
 type KVClient interface {
-	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
+	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 }
 
@@ -159,18 +159,18 @@ func NewKVClient(cc *grpc.ClientConn) KVClient {
 	return &kVClient{cc}
 }
 
-func (c *kVClient) Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error) {
-	out := new(GetResponse)
-	err := grpc.Invoke(ctx, "/kv.KV/Get", in, out, c.cc, opts...)
+func (c *kVClient) Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error) {
+	out := new(SetResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/Set", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kVClient) Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error) {
-	out := new(SetResponse)
-	err := grpc.Invoke(ctx, "/kv.KV/Set", in, out, c.cc, opts...)
+func (c *kVClient) Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error) {
+	out := new(GetResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/Get", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,31 +189,13 @@ func (c *kVClient) Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.C
 // Server API for KV service
 
 type KVServer interface {
-	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Set(context.Context, *SetRequest) (*SetResponse, error)
+	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
 }
 
 func RegisterKVServer(s *grpc.Server, srv KVServer) {
 	s.RegisterService(&_KV_serviceDesc, srv)
-}
-
-func _KV_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KVServer).Get(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/kv.KV/Get",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KVServer).Get(ctx, req.(*GetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _KV_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -230,6 +212,24 @@ func _KV_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{})
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KVServer).Set(ctx, req.(*SetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KV_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KVServer).Get(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kv.KV/Get",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KVServer).Get(ctx, req.(*GetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -257,12 +257,12 @@ var _KV_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*KVServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Get",
-			Handler:    _KV_Get_Handler,
-		},
-		{
 			MethodName: "Set",
 			Handler:    _KV_Set_Handler,
+		},
+		{
+			MethodName: "Get",
+			Handler:    _KV_Get_Handler,
 		},
 		{
 			MethodName: "Delete",
@@ -285,9 +285,9 @@ var fileDescriptor0 = []byte{
 	0x8e, 0x92, 0x09, 0x17, 0x57, 0x30, 0x1e, 0x43, 0x10, 0xba, 0x98, 0x90, 0x75, 0xf1, 0x72, 0x71,
 	0x07, 0x23, 0x8c, 0x56, 0x52, 0xe4, 0xe2, 0x75, 0x49, 0xcd, 0x49, 0x2d, 0x49, 0xc5, 0xed, 0x18,
 	0x01, 0x2e, 0x3e, 0x98, 0x12, 0x88, 0x26, 0xa3, 0x6e, 0x46, 0x2e, 0x26, 0xef, 0x30, 0x21, 0x0d,
-	0x2e, 0x66, 0xf7, 0xd4, 0x12, 0x21, 0x3e, 0xbd, 0xec, 0x32, 0x3d, 0x84, 0x77, 0xa4, 0xf8, 0xe1,
-	0x7c, 0xa8, 0x1d, 0x0c, 0x20, 0x95, 0xc1, 0x30, 0x95, 0xc1, 0x68, 0x2a, 0x83, 0x51, 0x54, 0x1a,
+	0x2e, 0xe6, 0xe0, 0xd4, 0x12, 0x21, 0x3e, 0xbd, 0xec, 0x32, 0x3d, 0x84, 0x4b, 0xa4, 0xf8, 0xe1,
+	0x7c, 0xa8, 0x1d, 0x0c, 0x20, 0x95, 0xee, 0x30, 0x95, 0xee, 0x68, 0x2a, 0xdd, 0x51, 0x54, 0x1a,
 	0x72, 0xb1, 0x41, 0x2c, 0x13, 0x12, 0x04, 0x49, 0xa2, 0xb8, 0x4d, 0x4a, 0x08, 0x59, 0x08, 0xa6,
-	0x25, 0x89, 0x0d, 0x1c, 0xae, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xbc, 0x7e, 0xff, 0x16,
+	0x25, 0x89, 0x0d, 0x1c, 0xae, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xd1, 0xef, 0x8a, 0xcc,
 	0x63, 0x01, 0x00, 0x00,
 }

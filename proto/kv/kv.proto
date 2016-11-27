@@ -3,11 +3,17 @@ syntax = 'proto3';
 package kv;
 
 service KV {
-  rpc Get(GetRequest) returns (GetResponse) {}
-
   rpc Set(SetRequest) returns (SetResponse) {}
+
+  rpc Get(GetRequest) returns (GetResponse) {}
   
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}
+
+ // rpc GetBackup(GetRequest) returns (GetResponse) {}
+
+ // rpc SetSetBackup(SetRequest) returns (SetResponse) {}
+  
+ // rpc DeleteBackup(DeleteRequest) returns (DeleteResponse) {}
 }
 
 message GetRequest {

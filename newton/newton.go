@@ -43,6 +43,7 @@ import (
 	"github.com/purak/newton/partition"
 	"github.com/purak/newton/store"
 
+	ksrv "github.com/purak/newton/proto/kv"
 	psrv "github.com/purak/newton/proto/partition"
 )
 
@@ -209,6 +210,9 @@ func (n *Newton) Start() error {
 	case <-n.partition.StopChan:
 		return n.errGroup.Wait()
 	}
+
+	// Register KV store's GRPC endpoints
+	ksrv.RegisterKVServer(g.server, n.kv.Grpc)
 
 	// Finally we can start an external HTTP/2 service to process incoming requests.
 	n.errGroup.Go(func() error {

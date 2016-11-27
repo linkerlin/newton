@@ -7,6 +7,12 @@ import (
 
 var ErrKeyNotFound = errors.New("No value found for given key")
 
+type item struct {
+	mu sync.RWMutex
+
+	value []byte
+}
+
 type partitions struct {
 	mu sync.RWMutex
 
