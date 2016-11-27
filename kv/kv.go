@@ -41,10 +41,10 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 	}
 	k.Grpc = g
 
-	router.POST("/kv/set/:key", k.setHandler)
-	router.PUT("/kv/set/:key", k.setHandler)
-	router.GET("/kv/get/:key", k.getHandler)
-	router.DELETE("/kv/delete/:key", k.deleteHandler)
+	router.POST("/kv/:key", k.setHandler)
+	router.PUT("/kv/:key", k.setHandler)
+	router.GET("/kv/:key", k.getHandler)
+	router.DELETE("/kv/:key", k.deleteHandler)
 	return k
 }
 
@@ -58,34 +58,57 @@ func (k *KV) Stop() {
 	close(k.done)
 }
 
+func (k *KV) rollbackBackups(addresses []string, key string) error {
+	for _, address := range addresses {
+		if err := k.callDeleteBackupOn(address, key); err != nil {
+			// TODO: retry this.
+			log.Errorf("Error while calling DeleteBackup on %s: %s", address, err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (k *KV) setBackups(partID int32, key string, value []byte) error {
+	ms, err := k.partman.FindBackupOwners(partID)
+	if err != nil {
+		return err
+	}
+	s := []string{}
+	for _, bAddr := range ms {
+		log.Debugf("Calling SetBackup for %s on %s", key, bAddr)
+		if err := k.callSetBackupOn(bAddr, key, value); err != nil {
+			if rErr := k.rollbackBackups(s, key); rErr != nil {
+				return rErr
+			}
+			return err
+		}
+		s = append(s, bAddr)
+	}
+	return nil
+}
+
 func (k *KV) Set(key string, value []byte) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindPartitionOwner(partID)
+	oAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return err
 	}
 	if local {
 		item := k.partitions.set(key, value, partID)
 		defer item.mu.Unlock()
-		ms, err := k.partman.FindBackupOwners(partID)
-		if err != nil {
+		if err := k.setBackups(partID, key, value); err != nil {
+			// Stale item should be removed by garbage collector component of KV, if a client
+			// does not try to set the key again shortly after the failure.
+			item.stale = true
 			return err
 		}
-		for _, bAddr := range ms {
-			log.Debugf("Calling SetBackup for %s on %s", key, bAddr)
-			if err := k.callSetBackupOn(bAddr, key, value); err != nil {
-				// TODO: What about stale items in kv?
-				return err
-			}
-		}
-		return nil
 	}
 
 	// Redirect the request to responsible node.
-	conn, err := k.partman.GetMemberConn(rAddr)
+	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
-		// TODO: Do we need to remove stale item explicitly from kv?
 		return err
 	}
 	c := ksrv.NewKVClient(conn)
@@ -103,7 +126,7 @@ func (k *KV) Set(key string, value []byte) error {
 func (k *KV) Get(key string) ([]byte, error) {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindPartitionOwner(partID)
+	oAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +134,7 @@ func (k *KV) Get(key string) ([]byte, error) {
 		return k.partitions.get(key, partID)
 	}
 	// Redirect the request to responsible node.
-	conn, err := k.partman.GetMemberConn(rAddr)
+	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -130,14 +153,11 @@ func (k *KV) Get(key string) ([]byte, error) {
 func (k *KV) Delete(key string) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
-	rAddr, local, err := k.partman.FindPartitionOwner(partID)
+	oAddr, local, err := k.partman.FindPartitionOwner(partID)
 	if err != nil {
 		return err
 	}
 	if local {
-		if err := k.partitions.delete(key, partID); err != nil {
-			return err
-		}
 		ms, err := k.partman.FindBackupOwners(partID)
 		if err != nil {
 			return err
@@ -149,10 +169,13 @@ func (k *KV) Delete(key string) error {
 				return err
 			}
 		}
+		if err := k.partitions.delete(key, partID); err != nil {
+			return err
+		}
 	}
 
 	// Redirect the request to responsible node.
-	conn, err := k.partman.GetMemberConn(rAddr)
+	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
 		return err
 	}
