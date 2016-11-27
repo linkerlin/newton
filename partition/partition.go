@@ -104,7 +104,7 @@ func (p *Partition) Start() error {
 	go p.tryToJoinCluster(payload)
 
 	// Wait for cluster join
-	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	p.waitGroup.Add(1)
 	go p.waitForConsensus(ctx)
 

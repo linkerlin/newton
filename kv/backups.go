@@ -3,6 +3,7 @@ package kv
 import (
 	"errors"
 
+	"github.com/purak/newton/log"
 	ksrv "github.com/purak/newton/proto/kv"
 	"golang.org/x/net/context"
 )
@@ -20,6 +21,7 @@ func (k *KV) SetBackup(key string, value []byte) error {
 	}
 	item := k.backups.set(key, value, partID)
 	defer item.mu.Unlock()
+	log.Debugf("Backup has been set for %s", key)
 	return nil
 }
 
@@ -50,6 +52,7 @@ func (k *KV) GetBackup(key string) ([]byte, error) {
 	if !local {
 		return nil, ErrWrongBackupMember
 	}
+	log.Debugf("Extracting value for %s from backup.", key)
 	return k.backups.get(key, partID)
 }
 
@@ -79,6 +82,7 @@ func (k *KV) DeleteBackup(key string) error {
 	if !local {
 		return ErrWrongBackupMember
 	}
+	log.Debugf("Deleting %s from backup.", key)
 	return k.backups.delete(key, partID)
 }
 

@@ -104,6 +104,7 @@ func (k *KV) Set(key string, value []byte) error {
 			item.stale = true
 			return err
 		}
+		return nil
 	}
 
 	// Redirect the request to responsible node.
@@ -169,9 +170,7 @@ func (k *KV) Delete(key string) error {
 				return err
 			}
 		}
-		if err := k.partitions.delete(key, partID); err != nil {
-			return err
-		}
+		return k.partitions.delete(key, partID)
 	}
 
 	// Redirect the request to responsible node.
