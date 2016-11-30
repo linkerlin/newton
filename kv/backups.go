@@ -10,7 +10,7 @@ import (
 
 var ErrWrongBackupMember = errors.New("Wrong backup member")
 
-func (k *KV) SetBackup(key string, value []byte) error {
+func (k *KV) setBackup(key string, value []byte) error {
 	partID := getPartitionID(key)
 	local, err := k.partman.AmIBackupOwner(partID)
 	if err != nil {
@@ -42,7 +42,7 @@ func (k *KV) callSetBackupOn(address, key string, value []byte) error {
 	return nil
 }
 
-func (k *KV) GetBackup(key string) ([]byte, error) {
+func (k *KV) getBackup(key string) ([]byte, error) {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
 	local, err := k.partman.AmIBackupOwner(partID)
@@ -72,7 +72,7 @@ func (k *KV) callGetBackupOn(address, key string) error {
 	return nil
 }
 
-func (k *KV) DeleteBackup(key string) error {
+func (k *KV) deleteBackup(key string) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
 	local, err := k.partman.AmIBackupOwner(partID)

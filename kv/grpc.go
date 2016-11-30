@@ -36,7 +36,7 @@ func (g *Grpc) Delete(ctx context.Context, in *ksrv.DeleteRequest) (*ksrv.Delete
 }
 
 func (g *Grpc) SetBackup(ctx context.Context, in *ksrv.SetRequest) (*ksrv.SetResponse, error) {
-	err := g.kv.SetBackup(in.Key, in.Value)
+	err := g.kv.setBackup(in.Key, in.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (g *Grpc) SetBackup(ctx context.Context, in *ksrv.SetRequest) (*ksrv.SetRes
 }
 
 func (g *Grpc) GetBackup(ctx context.Context, in *ksrv.GetRequest) (*ksrv.GetResponse, error) {
-	value, err := g.kv.GetBackup(in.Key)
+	value, err := g.kv.getBackup(in.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (g *Grpc) GetBackup(ctx context.Context, in *ksrv.GetRequest) (*ksrv.GetRes
 }
 
 func (g *Grpc) DeleteBackup(ctx context.Context, in *ksrv.DeleteRequest) (*ksrv.DeleteResponse, error) {
-	err := g.kv.DeleteBackup(in.Key)
+	err := g.kv.deleteBackup(in.Key)
 	if err != nil {
 		return nil, err
 	}
