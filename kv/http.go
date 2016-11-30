@@ -2,6 +2,8 @@ package kv
 
 import (
 	"bytes"
+	"strconv"
+	"strings"
 
 	"io"
 	"io/ioutil"
@@ -19,7 +21,19 @@ func (k *KV) setHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if err = k.Set(key, value); err != nil {
+
+	var ttl int64
+	ttlRaw := ps.ByName("ttl")
+	if len(strings.Trim(ttlRaw, " ")) != 0 {
+		ttl, err = strconv.ParseInt(ttlRaw, 10, 64)
+		if err != nil {
+			log.Errorf("[HTTP-KV-Set] Error while reading ttl for key %s: %s", key, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err = k.Set(key, value, ttl); err != nil {
 		log.Errorf("[HTTP-KV-Set] Error while setting key %s: %s", key, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

@@ -10,7 +10,7 @@ import (
 
 var ErrWrongBackupMember = errors.New("Wrong backup member")
 
-func (k *KV) setBackup(key string, value []byte) error {
+func (k *KV) setBackup(key string, value []byte, ttl int64) error {
 	partID := getPartitionID(key)
 	local, err := k.partman.AmIBackupOwner(partID)
 	if err != nil {
@@ -19,7 +19,7 @@ func (k *KV) setBackup(key string, value []byte) error {
 	if !local {
 		return ErrWrongBackupMember
 	}
-	item := k.backups.set(key, value, partID)
+	item := k.backups.set(key, value, partID, ttl)
 	defer item.mu.Unlock()
 	log.Debugf("Backup has been set for %s", key)
 	return nil

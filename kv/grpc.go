@@ -10,7 +10,7 @@ type Grpc struct {
 }
 
 func (g *Grpc) Set(ctx context.Context, in *ksrv.SetRequest) (*ksrv.SetResponse, error) {
-	err := g.kv.Set(in.Key, in.Value)
+	err := g.kv.Set(in.Key, in.Value, in.Ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (g *Grpc) Delete(ctx context.Context, in *ksrv.DeleteRequest) (*ksrv.Delete
 }
 
 func (g *Grpc) SetBackup(ctx context.Context, in *ksrv.SetRequest) (*ksrv.SetResponse, error) {
-	err := g.kv.setBackup(in.Key, in.Value)
+	err := g.kv.setBackup(in.Key, in.Value, in.Ttl)
 	if err != nil {
 		return nil, err
 	}

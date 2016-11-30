@@ -45,6 +45,10 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 	router.PUT("/kv/:key", k.setHandler)
 	router.GET("/kv/:key", k.getHandler)
 	router.DELETE("/kv/:key", k.deleteHandler)
+
+	k.waitGroup.Add(1)
+	k.garbageCollector()
+
 	return k
 }
 
@@ -88,7 +92,7 @@ func (k *KV) setBackups(partID int32, key string, value []byte) error {
 	return nil
 }
 
-func (k *KV) Set(key string, value []byte) error {
+func (k *KV) Set(key string, value []byte, ttl int64) error {
 	// Find partition number for the given key
 	partID := getPartitionID(key)
 	oAddr, local, err := k.partman.FindPartitionOwner(partID)
@@ -96,7 +100,7 @@ func (k *KV) Set(key string, value []byte) error {
 		return err
 	}
 	if local {
-		item := k.partitions.set(key, value, partID)
+		item := k.partitions.set(key, value, partID, ttl)
 		defer item.mu.Unlock()
 		if err := k.setBackups(partID, key, value); err != nil {
 			// Stale item should be removed by garbage collector component of KV, if a client

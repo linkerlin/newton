@@ -11,6 +11,7 @@ type item struct {
 	mu sync.RWMutex
 
 	value []byte
+	ttl   int64
 	stale bool
 }
 
@@ -26,7 +27,7 @@ type kv struct {
 	m map[string]*item
 }
 
-func (pt *partitions) set(key string, value []byte, partID int32) *item {
+func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) *item {
 	pt.mu.Lock()
 	part, ok := pt.m[partID]
 	if !ok {
@@ -44,6 +45,7 @@ func (pt *partitions) set(key string, value []byte, partID int32) *item {
 		// Update the value in source an its backups.
 		i.mu.Lock()
 		i.value = value
+		i.ttl = ttl
 		// Reset stale field. We will try to propagate the new value to backup members.
 		i.stale = false
 		// Unlock the item in KV.Set
