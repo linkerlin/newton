@@ -110,6 +110,9 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		item, _ := k.partitions.set(key, value, partID, ttl)
 		defer item.mu.Unlock()
 		if err := k.setBackups(partID, key, value); err != nil {
+			// Stale item should be removed by garbage collector component of KV, if a client
+			// does not try to set the key again shortly after the failure.
+			item.stale = true
 			return err
 		}
 		return nil

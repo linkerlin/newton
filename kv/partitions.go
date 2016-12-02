@@ -12,6 +12,7 @@ type item struct {
 
 	value []byte
 	ttl   int64
+	stale bool
 }
 
 type partitions struct {
@@ -41,15 +42,8 @@ func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) (*i
 	defer part.mu.Unlock()
 	i, ok := part.m[key]
 	var oldItem *item
-	if ok {
+	if ok && !i.stale {
 		oldItem = i
-		/*
-			// Update the value in source an its backups.
-			i.mu.Lock()
-			i.value = value
-			i.ttl = ttl
-			// Unlock the item in KV.Set
-			return i*/
 	}
 	// Create a new record.
 	i = &item{
@@ -74,6 +68,12 @@ func (pt *partitions) get(key string, partID int32) ([]byte, error) {
 	part.mu.RLock()
 	i, ok := part.m[key]
 	if !ok {
+		part.mu.RUnlock()
+		return nil, ErrKeyNotFound
+	}
+
+	if i.stale {
+		// Garbage value. It will be removed by garbage collector after some time.
 		part.mu.RUnlock()
 		return nil, ErrKeyNotFound
 	}
