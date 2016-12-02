@@ -12,7 +12,6 @@ type item struct {
 
 	value []byte
 	ttl   int64
-	stale bool
 }
 
 type partitions struct {
@@ -46,8 +45,6 @@ func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) *it
 		i.mu.Lock()
 		i.value = value
 		i.ttl = ttl
-		// Reset stale field. We will try to propagate the new value to backup members.
-		i.stale = false
 		// Unlock the item in KV.Set
 		return i
 	}
@@ -74,12 +71,6 @@ func (pt *partitions) get(key string, partID int32) ([]byte, error) {
 	part.mu.RLock()
 	i, ok := part.m[key]
 	if !ok {
-		part.mu.RUnlock()
-		return nil, ErrKeyNotFound
-	}
-
-	if i.stale {
-		// Garbage value. It will be removed by garbage collector after some time.
 		part.mu.RUnlock()
 		return nil, ErrKeyNotFound
 	}
