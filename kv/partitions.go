@@ -26,7 +26,7 @@ type kv struct {
 	m map[string]*item
 }
 
-func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) *item {
+func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) (*item, *item) {
 	pt.mu.Lock()
 	part, ok := pt.m[partID]
 	if !ok {
@@ -40,13 +40,16 @@ func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) *it
 	part.mu.Lock()
 	defer part.mu.Unlock()
 	i, ok := part.m[key]
+	var oldItem *item
 	if ok {
-		// Update the value in source an its backups.
-		i.mu.Lock()
-		i.value = value
-		i.ttl = ttl
-		// Unlock the item in KV.Set
-		return i
+		oldItem = i
+		/*
+			// Update the value in source an its backups.
+			i.mu.Lock()
+			i.value = value
+			i.ttl = ttl
+			// Unlock the item in KV.Set
+			return i*/
 	}
 	// Create a new record.
 	i = &item{
@@ -55,7 +58,7 @@ func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) *it
 	i.mu.Lock()
 	part.m[key] = i
 	// Unlock the item in KV.Set
-	return i
+	return i, oldItem
 }
 
 func (pt *partitions) get(key string, partID int32) ([]byte, error) {

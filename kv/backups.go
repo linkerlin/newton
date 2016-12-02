@@ -19,7 +19,7 @@ func (k *KV) setBackup(key string, value []byte, ttl int64) error {
 	if !local {
 		return ErrWrongBackupMember
 	}
-	item := k.backups.set(key, value, partID, ttl)
+	item, _ := k.backups.set(key, value, partID, ttl)
 	defer item.mu.Unlock()
 	log.Debugf("Backup has been set for %s", key)
 	return nil

@@ -17,9 +17,10 @@ type KV struct {
 	done      chan struct{}
 	partman   *partition.Partition
 
-	partitions *partitions
-	backups    *partitions
-	Grpc       *Grpc
+	partitions   *partitions
+	transactions *transactions
+	backups      *partitions
+	Grpc         *Grpc
 }
 
 func New(p *partition.Partition, router *httprouter.Router) *KV {
@@ -29,13 +30,19 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 	backups := &partitions{
 		m: make(map[int32]*kv),
 	}
+	transactions := &transactions{
+		set:    make(map[int32]*kv),
+		delete: make(map[int32]*tDelete),
+	}
 
 	k := &KV{
-		done:       make(chan struct{}),
-		partman:    p,
-		partitions: parts,
-		backups:    backups,
+		done:         make(chan struct{}),
+		partman:      p,
+		partitions:   parts,
+		backups:      backups,
+		transactions: transactions,
 	}
+
 	g := &Grpc{
 		kv: k,
 	}
@@ -100,7 +107,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return err
 	}
 	if local {
-		item := k.partitions.set(key, value, partID, ttl)
+		item, _ := k.partitions.set(key, value, partID, ttl)
 		defer item.mu.Unlock()
 		if err := k.setBackups(partID, key, value); err != nil {
 			return err
