@@ -80,7 +80,7 @@ func (k *KV) rollbackBackups(addresses []string, key string) error {
 	return nil
 }
 
-func (k *KV) setBackups(partID int32, key string, value []byte) error {
+func (k *KV) startNewSetTransaction(partID int32, key string, value []byte) error {
 	ms, err := k.partman.FindBackupOwners(partID)
 	if err != nil {
 		return err
@@ -106,18 +106,24 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	if err != nil {
 		return err
 	}
-	if local {
-		item, _ := k.partitions.set(key, value, partID, ttl)
-		defer item.mu.Unlock()
-		if err := k.setBackups(partID, key, value); err != nil {
-			// Stale item should be removed by garbage collector component of KV, if a client
-			// does not try to set the key again shortly after the failure.
-			item.stale = true
-			return err
-		}
-		return nil
+	if !local {
+		return k.redirectSet(key, value, ttl, oAddr)
 	}
 
+	item, _ := k.partitions.set(key, value, partID, ttl)
+	defer item.mu.Unlock()
+	if err := k.startNewSetTransaction(partID, key, value); err != nil {
+		// Stale item should be removed by garbage collector component of KV, if a client
+		// does not try to set the key again shortly after the failure.
+		item.stale = true
+		return err
+	}
+	// TODO: commit changes now. If you encoutner a problem during commit phase,
+	// remove committed data or set the old one again.
+	return nil
+}
+
+func (k *KV) redirectSet(key string, value []byte, ttl int64, oAddr string) error {
 	// Redirect the request to responsible node.
 	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
@@ -142,9 +148,13 @@ func (k *KV) Get(key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if local {
-		return k.partitions.get(key, partID)
+	if !local {
+		return k.redirectGet(key, oAddr)
 	}
+	return k.partitions.get(key, partID)
+}
+
+func (k *KV) redirectGet(key, oAddr string) ([]byte, error) {
 	// Redirect the request to responsible node.
 	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
@@ -169,21 +179,24 @@ func (k *KV) Delete(key string) error {
 	if err != nil {
 		return err
 	}
-	if local {
-		ms, err := k.partman.FindBackupOwners(partID)
-		if err != nil {
-			return err
-		}
-		for _, bAddr := range ms {
-			log.Debugf("Calling DeleteBackup for %s on %s", key, bAddr)
-			if err := k.callDeleteBackupOn(bAddr, key); err != nil {
-				return err
-			}
-		}
-		return k.partitions.delete(key, partID)
+	if !local {
+		return k.redirectDelete(key, oAddr)
 	}
 
-	// Redirect the request to responsible node.
+	ms, err := k.partman.FindBackupOwners(partID)
+	if err != nil {
+		return err
+	}
+	for _, bAddr := range ms {
+		log.Debugf("Calling DeleteBackup for %s on %s", key, bAddr)
+		if err := k.callDeleteBackupOn(bAddr, key); err != nil {
+			return err
+		}
+	}
+	return k.partitions.delete(key, partID)
+}
+
+func (k *KV) redirectDelete(key, oAddr string) error {
 	conn, err := k.partman.GetMemberConn(oAddr)
 	if err != nil {
 		return err
