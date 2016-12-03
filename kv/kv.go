@@ -69,27 +69,23 @@ func (k *KV) Stop() {
 	close(k.done)
 }
 
-func (k *KV) rollbackBackups(addresses []string, key string) error {
+func (k *KV) undoTransactionForSet(addresses []string, key string, partID int32) error {
 	for _, address := range addresses {
-		if err := k.callDeleteBackupOn(address, key); err != nil {
-			// TODO: retry this.
-			log.Errorf("Error while calling DeleteBackup on %s: %s", address, err)
+		// TODO: Check the address on partition table.
+		if err := k.callRollbackTransactionForSetOn(address, key, partID); err != nil {
+			log.Errorf("Error while calling RollbackTransactionForSet on %s: %s", address, err)
 			return err
 		}
 	}
 	return nil
 }
 
-func (k *KV) startNewSetTransaction(partID int32, key string, value []byte) error {
-	ms, err := k.partman.FindBackupOwners(partID)
-	if err != nil {
-		return err
-	}
+func (k *KV) startTransactionForSet(addresses []string, partID int32, key string, value []byte) error {
 	s := []string{}
-	for _, bAddr := range ms {
-		log.Debugf("Calling SetBackup for %s on %s", key, bAddr)
-		if err := k.callSetBackupOn(bAddr, key, value); err != nil {
-			if rErr := k.rollbackBackups(s, key); rErr != nil {
+	for _, bAddr := range addresses {
+		log.Debugf("Calling TransactionForSet for %s on %s", key, bAddr)
+		if err := k.callTransactionForSetOn(bAddr, key, value, partID); err != nil {
+			if rErr := k.undoTransactionForSet(s, key, partID); rErr != nil {
 				return rErr
 			}
 			return err
@@ -110,16 +106,40 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return k.redirectSet(key, value, ttl, oAddr)
 	}
 
-	item, _ := k.partitions.set(key, value, partID, ttl)
+	addresses, err := k.partman.FindBackupOwners(partID)
+	if err != nil {
+		return err
+	}
+
+	item, oldItem := k.partitions.set(key, value, partID, ttl)
 	defer item.mu.Unlock()
-	if err := k.startNewSetTransaction(partID, key, value); err != nil {
+	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
 		// Stale item should be removed by garbage collector component of KV, if a client
 		// does not try to set the key again shortly after the failure.
 		item.stale = true
 		return err
 	}
-	// TODO: commit changes now. If you encoutner a problem during commit phase,
+	// Commit changes now. If you encoutner a problem during commit phase,
 	// remove committed data or set the old one again.
+	s := []string{}
+	for _, bAddr := range addresses {
+		log.Debugf("Calling CommitTransactionForSet for %s on %s", key, bAddr)
+		if err := k.callCommitTransactionForSetOn(bAddr, key, partID); err != nil {
+			if oldItem != nil {
+				if tErr := k.startTransactionForSet(s, partID, key, oldItem.value); tErr != nil {
+					// Stale item should be removed by garbage collector component of KV, if a client
+					// does not try to set the key again shortly after the failure.
+					item.stale = true
+					return tErr
+				}
+				return err
+			}
+			// TODO: delete committed item
+			return err
+		}
+		s = append(s, bAddr)
+	}
+
 	return nil
 }
 
@@ -187,11 +207,12 @@ func (k *KV) Delete(key string) error {
 	if err != nil {
 		return err
 	}
+	s := []string{}
 	for _, bAddr := range ms {
-		log.Debugf("Calling DeleteBackup for %s on %s", key, bAddr)
-		if err := k.callDeleteBackupOn(bAddr, key); err != nil {
-			return err
+		log.Debugf("Calling TransactionForDelete for %s on %s", key, bAddr)
+		if err := k.callTransactionForDeleteOn(bAddr, key, partID); err != nil {
 		}
+		s = append(s, bAddr)
 	}
 	return k.partitions.delete(key, partID)
 }

@@ -1,10 +1,13 @@
 package kv
 
 import (
+	"context"
 	"errors"
 	"sync"
 
 	"github.com/purak/newton/log"
+
+	ksrv "github.com/purak/newton/proto/kv"
 )
 
 var ErrPartitionNotFound = errors.New("Partition not found")
@@ -22,7 +25,7 @@ type transactions struct {
 	delete map[int32]*tDelete
 }
 
-func (k *KV) setTransaction(key string, value []byte, ttl int64, partID int32) error {
+func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32) error {
 	ok, err := k.partman.AmIBackupOwner(partID)
 	if err != nil {
 		return err
@@ -50,7 +53,25 @@ func (k *KV) setTransaction(key string, value []byte, ttl int64, partID int32) e
 	return nil
 }
 
-func (k *KV) commitSetTransaction(key string, partID int32) error {
+func (k *KV) callTransactionForSetOn(address, key string, value []byte, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionForSetRequest{
+		Key:         key,
+		Value:       value,
+		PartitionID: partID,
+	}
+	_, err = c.TransactionForSet(context.Background(), sr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *KV) commitTransactionForSet(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
@@ -75,7 +96,24 @@ func (k *KV) commitSetTransaction(key string, partID int32) error {
 	return nil
 }
 
-func (k *KV) rollbackSetTransaction(key string, partID int32) error {
+func (k *KV) callCommitTransactionForSetOn(address, key string, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionQueryRequest{
+		Key:         key,
+		PartitionID: partID,
+	}
+	_, err = c.CommitTransactionForSet(context.Background(), sr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *KV) rollbackTransactionForSet(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 	part, ok := k.transactions.set[partID]
@@ -93,7 +131,24 @@ func (k *KV) rollbackSetTransaction(key string, partID int32) error {
 	return nil
 }
 
-func (k *KV) deleteTransaction(key string, partID int32) error {
+func (k *KV) callRollbackTransactionForSetOn(address, key string, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionQueryRequest{
+		Key:         key,
+		PartitionID: partID,
+	}
+	_, err = c.CommitTransactionForSet(context.Background(), sr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *KV) transactionForDelete(key string, partID int32) error {
 	ok, err := k.partman.AmIBackupOwner(partID)
 	if err != nil {
 		return err
@@ -117,7 +172,24 @@ func (k *KV) deleteTransaction(key string, partID int32) error {
 	return nil
 }
 
-func (k *KV) commitDeleteTransaction(key string, partID int32) error {
+func (k *KV) callTransactionForDeleteOn(address, key string, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionForDeleteRequest{
+		Key:         key,
+		PartitionID: partID,
+	}
+	_, err = c.TransactionForDelete(context.Background(), sr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *KV) commitTransactionForDelete(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
@@ -140,7 +212,24 @@ func (k *KV) commitDeleteTransaction(key string, partID int32) error {
 	return nil
 }
 
-func (k *KV) rollbackDeleteTransaction(key string, partID int32) error {
+func (k *KV) callCommitTransactionForDeleteOn(address, key string, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionQueryRequest{
+		Key:         key,
+		PartitionID: partID,
+	}
+	_, err = c.CommitTransactionForDelete(context.Background(), sr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *KV) rollbackTransactionForDelete(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
@@ -159,5 +248,22 @@ func (k *KV) rollbackDeleteTransaction(key string, partID int32) error {
 	}
 
 	log.Debugf("Delete transaction has been deleted(rollback) for %s", key)
+	return nil
+}
+
+func (k *KV) callRollbackTransactionForDeleteOn(address, key string, partID int32) error {
+	conn, err := k.partman.GetMemberConn(address)
+	if err != nil {
+		return err
+	}
+	c := ksrv.NewKVClient(conn)
+	sr := &ksrv.TransactionQueryRequest{
+		Key:         key,
+		PartitionID: partID,
+	}
+	_, err = c.CommitTransactionForDelete(context.Background(), sr)
+	if err != nil {
+		return err
+	}
 	return nil
 }

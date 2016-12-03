@@ -9,6 +9,12 @@ It is generated from these files:
 	kv.proto
 
 It has these top-level messages:
+	TransactionForSetRequest
+	TransactionForSetResponse
+	TransactionForDeleteRequest
+	TransactionForDeleteResponse
+	TransactionQueryRequest
+	TransactionQueryResponse
 	GetRequest
 	GetResponse
 	SetRequest
@@ -38,6 +44,118 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+type TransactionForSetRequest struct {
+	Key         string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
+	Value       []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Ttl         int64  `protobuf:"varint,3,opt,name=ttl" json:"ttl,omitempty"`
+	PartitionID int32  `protobuf:"varint,4,opt,name=partitionID" json:"partitionID,omitempty"`
+}
+
+func (m *TransactionForSetRequest) Reset()                    { *m = TransactionForSetRequest{} }
+func (m *TransactionForSetRequest) String() string            { return proto.CompactTextString(m) }
+func (*TransactionForSetRequest) ProtoMessage()               {}
+func (*TransactionForSetRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+
+func (m *TransactionForSetRequest) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
+func (m *TransactionForSetRequest) GetValue() []byte {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
+
+func (m *TransactionForSetRequest) GetTtl() int64 {
+	if m != nil {
+		return m.Ttl
+	}
+	return 0
+}
+
+func (m *TransactionForSetRequest) GetPartitionID() int32 {
+	if m != nil {
+		return m.PartitionID
+	}
+	return 0
+}
+
+type TransactionForSetResponse struct {
+}
+
+func (m *TransactionForSetResponse) Reset()                    { *m = TransactionForSetResponse{} }
+func (m *TransactionForSetResponse) String() string            { return proto.CompactTextString(m) }
+func (*TransactionForSetResponse) ProtoMessage()               {}
+func (*TransactionForSetResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+type TransactionForDeleteRequest struct {
+	Key         string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
+	PartitionID int32  `protobuf:"varint,2,opt,name=partitionID" json:"partitionID,omitempty"`
+}
+
+func (m *TransactionForDeleteRequest) Reset()                    { *m = TransactionForDeleteRequest{} }
+func (m *TransactionForDeleteRequest) String() string            { return proto.CompactTextString(m) }
+func (*TransactionForDeleteRequest) ProtoMessage()               {}
+func (*TransactionForDeleteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *TransactionForDeleteRequest) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
+func (m *TransactionForDeleteRequest) GetPartitionID() int32 {
+	if m != nil {
+		return m.PartitionID
+	}
+	return 0
+}
+
+type TransactionForDeleteResponse struct {
+}
+
+func (m *TransactionForDeleteResponse) Reset()                    { *m = TransactionForDeleteResponse{} }
+func (m *TransactionForDeleteResponse) String() string            { return proto.CompactTextString(m) }
+func (*TransactionForDeleteResponse) ProtoMessage()               {}
+func (*TransactionForDeleteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+
+type TransactionQueryRequest struct {
+	Key         string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
+	PartitionID int32  `protobuf:"varint,2,opt,name=partitionID" json:"partitionID,omitempty"`
+}
+
+func (m *TransactionQueryRequest) Reset()                    { *m = TransactionQueryRequest{} }
+func (m *TransactionQueryRequest) String() string            { return proto.CompactTextString(m) }
+func (*TransactionQueryRequest) ProtoMessage()               {}
+func (*TransactionQueryRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *TransactionQueryRequest) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
+func (m *TransactionQueryRequest) GetPartitionID() int32 {
+	if m != nil {
+		return m.PartitionID
+	}
+	return 0
+}
+
+type TransactionQueryResponse struct {
+}
+
+func (m *TransactionQueryResponse) Reset()                    { *m = TransactionQueryResponse{} }
+func (m *TransactionQueryResponse) String() string            { return proto.CompactTextString(m) }
+func (*TransactionQueryResponse) ProtoMessage()               {}
+func (*TransactionQueryResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+
 type GetRequest struct {
 	Key string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
 }
@@ -45,7 +163,7 @@ type GetRequest struct {
 func (m *GetRequest) Reset()                    { *m = GetRequest{} }
 func (m *GetRequest) String() string            { return proto.CompactTextString(m) }
 func (*GetRequest) ProtoMessage()               {}
-func (*GetRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (*GetRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 func (m *GetRequest) GetKey() string {
 	if m != nil {
@@ -61,7 +179,7 @@ type GetResponse struct {
 func (m *GetResponse) Reset()                    { *m = GetResponse{} }
 func (m *GetResponse) String() string            { return proto.CompactTextString(m) }
 func (*GetResponse) ProtoMessage()               {}
-func (*GetResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+func (*GetResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *GetResponse) GetValue() []byte {
 	if m != nil {
@@ -79,7 +197,7 @@ type SetRequest struct {
 func (m *SetRequest) Reset()                    { *m = SetRequest{} }
 func (m *SetRequest) String() string            { return proto.CompactTextString(m) }
 func (*SetRequest) ProtoMessage()               {}
-func (*SetRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+func (*SetRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *SetRequest) GetKey() string {
 	if m != nil {
@@ -108,7 +226,7 @@ type SetResponse struct {
 func (m *SetResponse) Reset()                    { *m = SetResponse{} }
 func (m *SetResponse) String() string            { return proto.CompactTextString(m) }
 func (*SetResponse) ProtoMessage()               {}
-func (*SetResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*SetResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 type DeleteRequest struct {
 	Key string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
@@ -117,7 +235,7 @@ type DeleteRequest struct {
 func (m *DeleteRequest) Reset()                    { *m = DeleteRequest{} }
 func (m *DeleteRequest) String() string            { return proto.CompactTextString(m) }
 func (*DeleteRequest) ProtoMessage()               {}
-func (*DeleteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (*DeleteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *DeleteRequest) GetKey() string {
 	if m != nil {
@@ -132,9 +250,15 @@ type DeleteResponse struct {
 func (m *DeleteResponse) Reset()                    { *m = DeleteResponse{} }
 func (m *DeleteResponse) String() string            { return proto.CompactTextString(m) }
 func (*DeleteResponse) ProtoMessage()               {}
-func (*DeleteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+func (*DeleteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 func init() {
+	proto.RegisterType((*TransactionForSetRequest)(nil), "kv.TransactionForSetRequest")
+	proto.RegisterType((*TransactionForSetResponse)(nil), "kv.TransactionForSetResponse")
+	proto.RegisterType((*TransactionForDeleteRequest)(nil), "kv.TransactionForDeleteRequest")
+	proto.RegisterType((*TransactionForDeleteResponse)(nil), "kv.TransactionForDeleteResponse")
+	proto.RegisterType((*TransactionQueryRequest)(nil), "kv.TransactionQueryRequest")
+	proto.RegisterType((*TransactionQueryResponse)(nil), "kv.TransactionQueryResponse")
 	proto.RegisterType((*GetRequest)(nil), "kv.GetRequest")
 	proto.RegisterType((*GetResponse)(nil), "kv.GetResponse")
 	proto.RegisterType((*SetRequest)(nil), "kv.SetRequest")
@@ -157,9 +281,12 @@ type KVClient interface {
 	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
-	GetBackup(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
-	SetBackup(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
-	DeleteBackup(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
+	TransactionForSet(ctx context.Context, in *TransactionForSetRequest, opts ...grpc.CallOption) (*TransactionForSetResponse, error)
+	RollbackTransactionForSet(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error)
+	CommitTransactionForSet(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error)
+	TransactionForDelete(ctx context.Context, in *TransactionForDeleteRequest, opts ...grpc.CallOption) (*TransactionForDeleteResponse, error)
+	RollbackTransactionForDelete(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error)
+	CommitTransactionForDelete(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error)
 }
 
 type kVClient struct {
@@ -197,27 +324,54 @@ func (c *kVClient) Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.C
 	return out, nil
 }
 
-func (c *kVClient) GetBackup(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error) {
-	out := new(GetResponse)
-	err := grpc.Invoke(ctx, "/kv.KV/GetBackup", in, out, c.cc, opts...)
+func (c *kVClient) TransactionForSet(ctx context.Context, in *TransactionForSetRequest, opts ...grpc.CallOption) (*TransactionForSetResponse, error) {
+	out := new(TransactionForSetResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/TransactionForSet", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kVClient) SetBackup(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error) {
-	out := new(SetResponse)
-	err := grpc.Invoke(ctx, "/kv.KV/SetBackup", in, out, c.cc, opts...)
+func (c *kVClient) RollbackTransactionForSet(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error) {
+	out := new(TransactionQueryResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/RollbackTransactionForSet", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kVClient) DeleteBackup(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error) {
-	out := new(DeleteResponse)
-	err := grpc.Invoke(ctx, "/kv.KV/DeleteBackup", in, out, c.cc, opts...)
+func (c *kVClient) CommitTransactionForSet(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error) {
+	out := new(TransactionQueryResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/CommitTransactionForSet", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kVClient) TransactionForDelete(ctx context.Context, in *TransactionForDeleteRequest, opts ...grpc.CallOption) (*TransactionForDeleteResponse, error) {
+	out := new(TransactionForDeleteResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/TransactionForDelete", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kVClient) RollbackTransactionForDelete(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error) {
+	out := new(TransactionQueryResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/RollbackTransactionForDelete", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kVClient) CommitTransactionForDelete(ctx context.Context, in *TransactionQueryRequest, opts ...grpc.CallOption) (*TransactionQueryResponse, error) {
+	out := new(TransactionQueryResponse)
+	err := grpc.Invoke(ctx, "/kv.KV/CommitTransactionForDelete", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +384,12 @@ type KVServer interface {
 	Set(context.Context, *SetRequest) (*SetResponse, error)
 	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
-	GetBackup(context.Context, *GetRequest) (*GetResponse, error)
-	SetBackup(context.Context, *SetRequest) (*SetResponse, error)
-	DeleteBackup(context.Context, *DeleteRequest) (*DeleteResponse, error)
+	TransactionForSet(context.Context, *TransactionForSetRequest) (*TransactionForSetResponse, error)
+	RollbackTransactionForSet(context.Context, *TransactionQueryRequest) (*TransactionQueryResponse, error)
+	CommitTransactionForSet(context.Context, *TransactionQueryRequest) (*TransactionQueryResponse, error)
+	TransactionForDelete(context.Context, *TransactionForDeleteRequest) (*TransactionForDeleteResponse, error)
+	RollbackTransactionForDelete(context.Context, *TransactionQueryRequest) (*TransactionQueryResponse, error)
+	CommitTransactionForDelete(context.Context, *TransactionQueryRequest) (*TransactionQueryResponse, error)
 }
 
 func RegisterKVServer(s *grpc.Server, srv KVServer) {
@@ -293,56 +450,110 @@ func _KV_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KV_GetBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRequest)
+func _KV_TransactionForSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionForSetRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KVServer).GetBackup(ctx, in)
+		return srv.(KVServer).TransactionForSet(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/kv.KV/GetBackup",
+		FullMethod: "/kv.KV/TransactionForSet",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KVServer).GetBackup(ctx, req.(*GetRequest))
+		return srv.(KVServer).TransactionForSet(ctx, req.(*TransactionForSetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KV_SetBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetRequest)
+func _KV_RollbackTransactionForSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KVServer).SetBackup(ctx, in)
+		return srv.(KVServer).RollbackTransactionForSet(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/kv.KV/SetBackup",
+		FullMethod: "/kv.KV/RollbackTransactionForSet",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KVServer).SetBackup(ctx, req.(*SetRequest))
+		return srv.(KVServer).RollbackTransactionForSet(ctx, req.(*TransactionQueryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KV_DeleteBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteRequest)
+func _KV_CommitTransactionForSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KVServer).DeleteBackup(ctx, in)
+		return srv.(KVServer).CommitTransactionForSet(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/kv.KV/DeleteBackup",
+		FullMethod: "/kv.KV/CommitTransactionForSet",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KVServer).DeleteBackup(ctx, req.(*DeleteRequest))
+		return srv.(KVServer).CommitTransactionForSet(ctx, req.(*TransactionQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KV_TransactionForDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionForDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KVServer).TransactionForDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kv.KV/TransactionForDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KVServer).TransactionForDelete(ctx, req.(*TransactionForDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KV_RollbackTransactionForDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KVServer).RollbackTransactionForDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kv.KV/RollbackTransactionForDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KVServer).RollbackTransactionForDelete(ctx, req.(*TransactionQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KV_CommitTransactionForDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KVServer).CommitTransactionForDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kv.KV/CommitTransactionForDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KVServer).CommitTransactionForDelete(ctx, req.(*TransactionQueryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -364,16 +575,28 @@ var _KV_serviceDesc = grpc.ServiceDesc{
 			Handler:    _KV_Delete_Handler,
 		},
 		{
-			MethodName: "GetBackup",
-			Handler:    _KV_GetBackup_Handler,
+			MethodName: "TransactionForSet",
+			Handler:    _KV_TransactionForSet_Handler,
 		},
 		{
-			MethodName: "SetBackup",
-			Handler:    _KV_SetBackup_Handler,
+			MethodName: "RollbackTransactionForSet",
+			Handler:    _KV_RollbackTransactionForSet_Handler,
 		},
 		{
-			MethodName: "DeleteBackup",
-			Handler:    _KV_DeleteBackup_Handler,
+			MethodName: "CommitTransactionForSet",
+			Handler:    _KV_CommitTransactionForSet_Handler,
+		},
+		{
+			MethodName: "TransactionForDelete",
+			Handler:    _KV_TransactionForDelete_Handler,
+		},
+		{
+			MethodName: "RollbackTransactionForDelete",
+			Handler:    _KV_RollbackTransactionForDelete_Handler,
+		},
+		{
+			MethodName: "CommitTransactionForDelete",
+			Handler:    _KV_CommitTransactionForDelete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -383,21 +606,29 @@ var _KV_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("kv.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 243 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x92, 0x3f, 0x4f, 0xc3, 0x30,
-	0x10, 0xc5, 0x49, 0x22, 0x2a, 0xf2, 0xfa, 0x87, 0x62, 0x31, 0x54, 0x1d, 0x50, 0x31, 0x4b, 0x26,
-	0x4b, 0xc0, 0xc0, 0x8e, 0x10, 0x1e, 0xd8, 0x6c, 0x89, 0xbd, 0xa0, 0x9b, 0x1c, 0x91, 0x40, 0x2e,
-	0x96, 0xf8, 0x3e, 0x7c, 0x50, 0xe4, 0xb8, 0x6d, 0x1a, 0x24, 0xaa, 0x6e, 0x77, 0xb9, 0xdf, 0xcb,
-	0xfb, 0x0d, 0xc6, 0x99, 0xf3, 0xaa, 0xfe, 0xaa, 0xb8, 0x12, 0xa9, 0xf3, 0xf2, 0x0a, 0xd0, 0xc4,
-	0x86, 0x3e, 0x5b, 0x6a, 0x58, 0xcc, 0x91, 0x39, 0xfa, 0x5e, 0x24, 0xab, 0xa4, 0xc8, 0x4d, 0x18,
-	0xe5, 0x0d, 0xc6, 0xdd, 0xbd, 0xa9, 0xab, 0x8f, 0x86, 0xc4, 0x25, 0x4e, 0xfd, 0xba, 0x6c, 0xa9,
-	0x43, 0x26, 0x26, 0x2e, 0xf2, 0x19, 0xb0, 0x07, 0x7e, 0xd2, 0xa7, 0xd2, 0xbd, 0x54, 0xe0, 0x98,
-	0xcb, 0x45, 0xb6, 0x4a, 0x8a, 0xcc, 0x84, 0x51, 0x4e, 0x31, 0xb6, 0x7d, 0x99, 0xbc, 0xc6, 0xf4,
-	0x89, 0x4a, 0x62, 0xfa, 0x5f, 0x6f, 0x8e, 0xd9, 0x16, 0x89, 0xa1, 0xbb, 0x9f, 0x14, 0xe9, 0xcb,
-	0xab, 0x28, 0x90, 0x59, 0x62, 0x31, 0x53, 0xce, 0xab, 0xde, 0x6d, 0x79, 0xbe, 0xdb, 0x37, 0x1d,
-	0x27, 0x81, 0xd4, 0x5b, 0x52, 0xff, 0x21, 0xf5, 0x80, 0xbc, 0xc5, 0x28, 0x96, 0x89, 0x8b, 0x70,
-	0x1c, 0xb8, 0x2d, 0xc5, 0xfe, 0xa7, 0x5d, 0x44, 0x21, 0xd7, 0xc4, 0x8f, 0xeb, 0x77, 0xd7, 0xd6,
-	0xc7, 0x54, 0x28, 0xe4, 0x76, 0xc8, 0x1f, 0x96, 0x7f, 0xc0, 0x24, 0x76, 0x6e, 0x22, 0xc7, 0x8a,
-	0xbd, 0x8d, 0xba, 0x27, 0x70, 0xff, 0x1b, 0x00, 0x00, 0xff, 0xff, 0xd3, 0xfc, 0x00, 0x3a, 0x0e,
-	0x02, 0x00, 0x00,
+	// 378 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xac, 0x94, 0x41, 0x4f, 0xc2, 0x30,
+	0x14, 0xc7, 0xdd, 0x26, 0x44, 0x1f, 0x82, 0xd0, 0x90, 0x30, 0xc6, 0xc4, 0x59, 0x2f, 0x3b, 0x91,
+	0xa8, 0x1f, 0x41, 0xc2, 0x62, 0x8c, 0x07, 0x8a, 0x21, 0x1a, 0x4f, 0x83, 0xf4, 0x40, 0x36, 0x28,
+	0x6e, 0x65, 0x09, 0x5f, 0xc8, 0xcf, 0x69, 0x2a, 0x73, 0x74, 0x6c, 0xd3, 0x03, 0xbb, 0xb5, 0x7d,
+	0xff, 0xfe, 0xff, 0x6f, 0xbf, 0xbd, 0x14, 0xce, 0xbc, 0x68, 0xb0, 0x0e, 0x18, 0x67, 0x48, 0xf5,
+	0x22, 0x1c, 0x81, 0xfe, 0x1a, 0xb8, 0xab, 0xd0, 0x9d, 0xf3, 0x05, 0x5b, 0x8d, 0x58, 0x30, 0xa1,
+	0x9c, 0xd0, 0xcf, 0x0d, 0x0d, 0x39, 0x6a, 0x82, 0xe6, 0xd1, 0xad, 0xae, 0x58, 0x8a, 0x7d, 0x4e,
+	0xc4, 0x12, 0xb5, 0xa1, 0x12, 0xb9, 0xfe, 0x86, 0xea, 0xaa, 0xa5, 0xd8, 0x17, 0x64, 0xb7, 0x11,
+	0x3a, 0xce, 0x7d, 0x5d, 0xb3, 0x14, 0x5b, 0x23, 0x62, 0x89, 0x2c, 0xa8, 0xad, 0xdd, 0x80, 0x2f,
+	0x84, 0xe7, 0xd3, 0x50, 0x3f, 0xb5, 0x14, 0xbb, 0x42, 0xe4, 0x23, 0xdc, 0x83, 0x6e, 0x4e, 0x6e,
+	0xb8, 0x66, 0xab, 0x90, 0xe2, 0x31, 0xf4, 0xd2, 0xc5, 0x21, 0xf5, 0x29, 0xa7, 0xc5, 0x7d, 0x1d,
+	0xe4, 0xa9, 0xd9, 0xbc, 0x3e, 0x98, 0xf9, 0x96, 0x71, 0xe4, 0x0b, 0x74, 0xa4, 0xfa, 0x78, 0x43,
+	0x83, 0xed, 0x31, 0x71, 0x46, 0x0a, 0x6b, 0x6c, 0x17, 0x47, 0xf5, 0x01, 0x9c, 0x3f, 0x20, 0xe3,
+	0x5b, 0xa8, 0x39, 0x7b, 0x18, 0x7b, 0xe6, 0x8a, 0xc4, 0x1c, 0x8f, 0x00, 0xca, 0xf8, 0x53, 0xb8,
+	0x0e, 0x35, 0x99, 0xfc, 0x0d, 0xd4, 0xff, 0x61, 0x8d, 0x9b, 0xd0, 0x48, 0xb3, 0xbb, 0xff, 0xaa,
+	0x80, 0xfa, 0x3c, 0x45, 0x36, 0x68, 0x13, 0xca, 0x51, 0x63, 0xe0, 0x45, 0x83, 0x7d, 0x6f, 0xc6,
+	0x65, 0xb2, 0x8f, 0x33, 0x4e, 0x84, 0xd2, 0xf9, 0x55, 0x3a, 0x07, 0x4a, 0x27, 0xa5, 0xbc, 0x83,
+	0xea, 0x2e, 0x0c, 0xb5, 0x44, 0x31, 0xd5, 0x9b, 0x81, 0xe4, 0xa3, 0xe4, 0x0a, 0x81, 0x56, 0x66,
+	0xb2, 0x90, 0x29, 0xa4, 0x45, 0x83, 0x6e, 0x5c, 0x15, 0x54, 0x13, 0xcf, 0x37, 0xe8, 0x12, 0xe6,
+	0xfb, 0x33, 0x77, 0xee, 0x65, 0xbd, 0x7b, 0x07, 0xb7, 0xe5, 0xe1, 0x31, 0xcc, 0xfc, 0x62, 0xe2,
+	0x3c, 0x85, 0xce, 0x23, 0x5b, 0x2e, 0x17, 0xbc, 0x64, 0xdf, 0x0f, 0x68, 0xe7, 0xcd, 0x3b, 0xba,
+	0xce, 0x7e, 0x6a, 0x1a, 0xaa, 0x55, 0x2c, 0x90, 0xcc, 0xcd, 0x7c, 0x1c, 0x71, 0xc8, 0x51, 0x9d,
+	0xbf, 0x83, 0x91, 0x47, 0xa4, 0x04, 0xeb, 0x59, 0xf5, 0xe7, 0xdd, 0x7b, 0xf8, 0x0e, 0x00, 0x00,
+	0xff, 0xff, 0x7c, 0xa2, 0xa6, 0x05, 0x03, 0x05, 0x00, 0x00,
 }

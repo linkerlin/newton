@@ -9,12 +9,41 @@ service KV {
   
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}
 
-  rpc GetBackup(GetRequest) returns (GetResponse) {}
+  rpc TransactionForSet(TransactionForSetRequest) returns (TransactionForSetResponse) {}
 
-  rpc SetBackup(SetRequest) returns (SetResponse) {}
+  rpc RollbackTransactionForSet(TransactionQueryRequest) returns (TransactionQueryResponse) {}
+
+  rpc CommitTransactionForSet(TransactionQueryRequest) returns (TransactionQueryResponse) {}
   
-  rpc DeleteBackup(DeleteRequest) returns (DeleteResponse) {}
+  rpc TransactionForDelete(TransactionForDeleteRequest) returns (TransactionForDeleteResponse) {}
+
+  rpc RollbackTransactionForDelete(TransactionQueryRequest) returns (TransactionQueryResponse) {}
+
+  rpc CommitTransactionForDelete(TransactionQueryRequest) returns (TransactionQueryResponse) {}
 }
+
+message TransactionForSetRequest {
+  string key         = 1;
+  bytes  value       = 2;
+  int64  ttl         = 3;
+  int32  partitionID = 4;
+}
+
+message TransactionForSetResponse {}
+
+message TransactionForDeleteRequest {
+  string key         = 1;
+  int32  partitionID = 2;
+}
+
+message TransactionForDeleteResponse {}
+
+message TransactionQueryRequest {
+  string key         = 1;
+  int32  partitionID = 2;
+}
+
+message TransactionQueryResponse {}
 
 message GetRequest {
   string key = 1;
