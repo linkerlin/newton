@@ -130,7 +130,8 @@ loop:
 				failed = append(failed, bAddr)
 				continue loop
 			}
-			if !ok {
+			if ok {
+				// Still a participant of the partition.
 				continue
 			}
 			// Remove the member, it's no longer a participant of the partition.
