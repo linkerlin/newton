@@ -2,6 +2,7 @@ package kv
 
 import (
 	"github.com/purak/newton/log"
+	"github.com/purak/newton/partition"
 	"golang.org/x/net/context"
 
 	ksrv "github.com/purak/newton/proto/kv"
@@ -70,18 +71,17 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return k.redirectSet(key, value, ttl, oAddr)
 	}
 
+	item, oldItem := k.partitions.set(key, value, partID, ttl)
+	defer item.mu.Unlock()
+
 	addresses, err := k.partman.FindBackupOwners(partID)
+	if err == partition.ErrNoBackupMemberFound {
+		log.Debugf("No backup member found for Partition: %d", partID)
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-
-	item, oldItem := k.partitions.set(key, value, partID, ttl)
-	defer item.mu.Unlock()
-	if len(addresses) == 0 {
-		// No other member to set the key/value as backup.
-		return nil
-	}
-
 	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
 		// Stale item should be removed by garbage collector component of KV, if a client
 		// does not try to set the key again shortly after the failure.

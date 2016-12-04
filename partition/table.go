@@ -15,9 +15,9 @@ import (
 const partitionCount int32 = 23
 
 var (
-	partitionTableLock    sync.RWMutex
-	errPartitionTableSet  = errors.New("Failed to set partition table")
-	ErrInvalidPartitionID = errors.New("Invalid partition ID")
+	partitionTableLock     sync.RWMutex
+	errPartitionTableSet   = errors.New("Failed to set partition table")
+	ErrNoBackupMemberFound = errors.New("Invalid partition ID")
 )
 
 func (p *Partition) createPartitionTable() {
@@ -59,6 +59,9 @@ func (p *Partition) createPartitionTable() {
 		}
 		// Get the next item, it's the backup node of the current one.
 		nextItem := p.table.Sorted[next]
+		if nextItem.GetAddress() == item.GetAddress() {
+			continue
+		}
 		// Copy integers
 		backups := &psrv.BackupPartitionsOfMember{
 			Partitions: []int32{},
@@ -143,7 +146,7 @@ func (p *Partition) FindPartitionOwner(partID int32) (string, bool, error) {
 	defer partitionTableLock.RUnlock()
 	rm, ok := p.table.Partitions[partID]
 	if !ok {
-		return "", false, ErrInvalidPartitionID
+		return "", false, ErrNoBackupMemberFound
 	}
 	if rm == p.config.Address {
 		return rm, true, nil
@@ -156,7 +159,7 @@ func (p *Partition) FindBackupOwners(partID int32) ([]string, error) {
 	defer partitionTableLock.RUnlock()
 	b, ok := p.table.Backups[partID]
 	if !ok {
-		return nil, ErrInvalidPartitionID
+		return nil, ErrNoBackupMemberFound
 	}
 	// TODO: backup arrangement algorithm doesn't implemented yet.
 	return []string{b}, nil
