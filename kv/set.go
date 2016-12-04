@@ -80,6 +80,10 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return nil
 	}
 	if err != nil {
+		// Something wrong with partition manager. It should be a rare incident in
+		// development phase and it shouldn't be encountered in production.
+		// Mark the item as stale.
+		item.stale = true
 		return err
 	}
 	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
