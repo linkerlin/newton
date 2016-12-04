@@ -116,29 +116,29 @@ func (k *KV) setOldItem(key string, ttl int64, partID int32, item *item, oldItem
 	// Set old value and TTL on local item.
 	item.value = oldItem.value
 	item.ttl = ttl
-	failed := []string{}
 
-loop:
-	for {
+	clearParticipantList := func(failed []string) ([]string, []string) {
+		tmp := []string{}
 		// We need to keep participant list of the partition clean.
-		for i, bAddr := range addresses {
+		for _, bAddr := range addresses {
 			ok, err := k.partman.IsBackupOwner(partID, bAddr)
 			if err != nil {
 				log.Errorf("Error while validating backup owner: %s", err)
 				// Retry this. This should be an inconsistency in partition table
 				// and it must be fixed by the cluster coordinator.
 				failed = append(failed, bAddr)
-				continue loop
-			}
-			if ok {
-				// Still a participant of the partition.
 				continue
 			}
-			// Remove the member, it's no longer a participant of the partition.
-			addresses = append(addresses[:i], addresses[i+1:]...)
-			continue loop
+			if ok {
+				tmp = append(tmp, bAddr)
+			}
 		}
+		return tmp, failed
+	}
 
+	for {
+		failed := []string{}
+		addresses, failed = clearParticipantList(failed)
 		if err := k.startTransactionForSet(addresses, partID, key, item.value); err != nil {
 			log.Errorf("Failed to set a new transaction to set the old item again: %s", err)
 			// If one of the participant nodes removed from the list, the above loop will catch
