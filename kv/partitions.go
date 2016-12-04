@@ -48,6 +48,7 @@ func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) (*i
 	// Create a new record.
 	i = &item{
 		value: value,
+		ttl:   ttl,
 	}
 	i.mu.Lock()
 	part.m[key] = i

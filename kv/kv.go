@@ -69,15 +69,38 @@ func (k *KV) Stop() {
 	close(k.done)
 }
 
-func (k *KV) undoTransactionForSet(addresses []string, key string, partID int32) error {
-	for _, address := range addresses {
-		// TODO: Check the address on partition table.
-		if err := k.callRollbackTransactionForSetOn(address, key, partID); err != nil {
-			log.Errorf("Error while calling RollbackTransactionForSet on %s: %s", address, err)
-			return err
+// Undo the transaction in a safe manner. We assume that the underlying partition manager works consistently.
+func (k *KV) undoTransactionForSet(addresses []string, key string, partID int32) {
+	for {
+		tmp := []string{}
+		for _, address := range addresses {
+			ok, err := k.partman.IsBackupOwner(partID, address)
+			if err != nil {
+				log.Errorf("Error while validating backup owner: %s", err)
+				// Retry this. This should be an inconsistency in partition table
+				// and it must be fixed by the cluster coordinator.
+				tmp = append(tmp, address)
+				continue
+			}
+			if !ok {
+				log.Debugf("%s is no longer a participant for PartitionID: %d. Skip rollbackTransactionForSet.", address, partID)
+				continue
+			}
+
+			log.Debugf("Calling RollbackTransactionForSet for %s on %s", key, address)
+			if err := k.callRollbackTransactionForSetOn(address, key, partID); err != nil {
+				log.Errorf("Error while calling RollbackTransactionForSet on %s: %s", address, err)
+				// Retry this until this member is removed from partition table by the cluster coordinator.
+				tmp = append(tmp, address)
+				continue
+			}
 		}
+		if len(tmp) == 0 {
+			break
+		}
+		addresses = tmp
 	}
-	return nil
+	log.Infof("TransactionForSet: %s on %d has been rolled back succesfully.", key, partID)
 }
 
 func (k *KV) startTransactionForSet(addresses []string, partID int32, key string, value []byte) error {
@@ -85,9 +108,12 @@ func (k *KV) startTransactionForSet(addresses []string, partID int32, key string
 	for _, bAddr := range addresses {
 		log.Debugf("Calling TransactionForSet for %s on %s", key, bAddr)
 		if err := k.callTransactionForSetOn(bAddr, key, value, partID); err != nil {
-			if rErr := k.undoTransactionForSet(s, key, partID); rErr != nil {
-				return rErr
-			}
+			// This function tries to undo the transaction in a for loop. That logic
+			// may seem silly but we assume that underlying partition manager works
+			// consistently and we eventually access all the members in s slice to undo
+			// the transaction. We have to do that to keep the partition in a consistent
+			// state.
+			k.undoTransactionForSet(s, key, partID)
 			return err
 		}
 		s = append(s, bAddr)
@@ -119,28 +145,83 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		item.stale = true
 		return err
 	}
-	// Commit changes now. If you encoutner a problem during commit phase,
+
+	sAddrs, err := k.tryToCommitTransactionForSet(addresses, key, partID)
+	if err != nil {
+		// Undo the commit and set old value
+		if oldItem != nil {
+			k.setOldItem(key, ttl, partID, item, oldItem, sAddrs)
+			return err
+		}
+		// TODO: remove the key/value from backups.
+		return err
+	}
+	return nil
+}
+
+func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID int32) ([]string, error) {
+	// Commit changes now. If you encountner a problem during commit phase,
 	// remove committed data or set the old one again.
-	s := []string{}
+	success := []string{}
 	for _, bAddr := range addresses {
 		log.Debugf("Calling CommitTransactionForSet for %s on %s", key, bAddr)
 		if err := k.callCommitTransactionForSetOn(bAddr, key, partID); err != nil {
-			if oldItem != nil {
-				if tErr := k.startTransactionForSet(s, partID, key, oldItem.value); tErr != nil {
-					// Stale item should be removed by garbage collector component of KV, if a client
-					// does not try to set the key again shortly after the failure.
-					item.stale = true
-					return tErr
-				}
-				return err
-			}
-			// TODO: delete committed item
-			return err
+			log.Errorf("Failed CallTransactionForSet: %s on %d", key, bAddr)
+			return success, err
 		}
-		s = append(s, bAddr)
+		success = append(success, bAddr)
 	}
+	return success, nil
+}
 
-	return nil
+func (k *KV) setOldItem(key string, ttl int64, partID int32, item *item, oldItem *item, addresses []string) {
+	// Set old value and TTL on local item.
+	item.value = oldItem.value
+	item.ttl = ttl
+	failed := []string{}
+
+loop:
+	for {
+		// We need to keep participant list of the partition clean.
+		for i, bAddr := range addresses {
+			ok, err := k.partman.IsBackupOwner(partID, bAddr)
+			if err != nil {
+				log.Errorf("Error while validating backup owner: %s", err)
+				// Retry this. This should be an inconsistency in partition table
+				// and it must be fixed by the cluster coordinator.
+				failed = append(failed, bAddr)
+				continue loop
+			}
+			if !ok {
+				continue
+			}
+			// Remove the member, it's no longer a participant of the partition.
+			addresses = append(addresses[:i], addresses[i+1:]...)
+			continue loop
+		}
+
+		if err := k.startTransactionForSet(addresses, partID, key, item.value); err != nil {
+			log.Errorf("Failed to set a new transaction to set the old item again: %s", err)
+			// If one of the participant nodes removed from the list, the above loop will catch
+			// this event and remove immediately it from the list. A fresh transaction will eventually
+			// be started for this operation.
+			continue
+		}
+
+		for _, bAddr := range addresses {
+			log.Debugf("Calling CommitTransactionForSet for %s on %s", key, bAddr)
+			if err := k.callCommitTransactionForSetOn(bAddr, key, partID); err != nil {
+				log.Errorf("Failed CallTransactionForSet: %s on %d", key, bAddr)
+				failed = append(failed, bAddr)
+				continue
+			}
+		}
+		// It's OK. Terminate this function.
+		if len(failed) == 0 {
+			break
+		}
+		addresses = failed
+	}
 }
 
 func (k *KV) redirectSet(key string, value []byte, ttl int64, oAddr string) error {

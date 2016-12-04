@@ -162,6 +162,20 @@ func (p *Partition) FindBackupOwners(partID int32) ([]string, error) {
 	return []string{b}, nil
 }
 
+func (p *Partition) IsBackupOwner(partID int32, address string) (bool, error) {
+	mm, err := p.FindBackupOwners(partID)
+	if err != nil {
+		return false, err
+	}
+
+	for _, mAddr := range mm {
+		if mAddr == address {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (p *Partition) AmIBackupOwner(partID int32) (bool, error) {
 	mm, err := p.FindBackupOwners(partID)
 	if err != nil {
