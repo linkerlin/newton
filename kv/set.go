@@ -77,6 +77,11 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 
 	item, oldItem := k.partitions.set(key, value, partID, ttl)
 	defer item.mu.Unlock()
+	if len(addresses) == 0 {
+		// No other member to set the key/value as backup.
+		return nil
+	}
+
 	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
 		// Stale item should be removed by garbage collector component of KV, if a client
 		// does not try to set the key again shortly after the failure.
@@ -112,33 +117,33 @@ func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID
 	return success, nil
 }
 
+func (k *KV) clearParticipantList(addresses, failed []string, partID int32) ([]string, []string) {
+	tmp := []string{}
+	// We need to keep participant list of the partition clean.
+	for _, bAddr := range addresses {
+		ok, err := k.partman.IsBackupOwner(partID, bAddr)
+		if err != nil {
+			log.Errorf("Error while validating backup owner: %s", err)
+			// Retry this. This should be an inconsistency in partition table
+			// and it must be fixed by the cluster coordinator.
+			failed = append(failed, bAddr)
+			continue
+		}
+		if ok {
+			tmp = append(tmp, bAddr)
+		}
+	}
+	return tmp, failed
+}
+
 func (k *KV) setOldItem(key string, ttl int64, partID int32, item *item, oldItem *item, addresses []string) {
 	// Set old value and TTL on local item.
 	item.value = oldItem.value
 	item.ttl = ttl
 
-	clearParticipantList := func(failed []string) ([]string, []string) {
-		tmp := []string{}
-		// We need to keep participant list of the partition clean.
-		for _, bAddr := range addresses {
-			ok, err := k.partman.IsBackupOwner(partID, bAddr)
-			if err != nil {
-				log.Errorf("Error while validating backup owner: %s", err)
-				// Retry this. This should be an inconsistency in partition table
-				// and it must be fixed by the cluster coordinator.
-				failed = append(failed, bAddr)
-				continue
-			}
-			if ok {
-				tmp = append(tmp, bAddr)
-			}
-		}
-		return tmp, failed
-	}
-
 	for {
 		failed := []string{}
-		addresses, failed = clearParticipantList(failed)
+		addresses, failed = k.clearParticipantList(addresses, failed, partID)
 		if err := k.startTransactionForSet(addresses, partID, key, item.value); err != nil {
 			log.Errorf("Failed to set a new transaction to set the old item again: %s", err)
 			// If one of the participant nodes removed from the list, the above loop will catch
