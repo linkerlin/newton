@@ -111,3 +111,22 @@ func (pt *partitions) delete(key string, partID int32) error {
 
 	return nil
 }
+
+func (pt *partitions) getItemInternally(key string, partID int32) (*item, error) {
+	pt.mu.RLock()
+	part, ok := pt.m[partID]
+	if !ok {
+		pt.mu.RUnlock()
+		// Partition could not be found for that key.
+		return nil, ErrKeyNotFound
+	}
+	part.mu.RLock()
+	defer part.mu.RUnlock()
+	pt.mu.RUnlock()
+	i, ok := part.m[key]
+	if !ok {
+		return nil, ErrKeyNotFound
+	}
+	i.mu.Lock()
+	return i, nil
+}
