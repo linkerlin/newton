@@ -72,7 +72,12 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	}
 
 	item, oldItem := k.partitions.set(key, value, partID, ttl)
-	defer item.mu.Unlock()
+	defer func() {
+		item.mu.Unlock()
+		if oldItem != nil {
+			oldItem.mu.Unlock()
+		}
+	}()
 
 	addresses, err := k.partman.FindBackupOwners(partID)
 	if err == partition.ErrNoBackupMemberFound {
@@ -98,7 +103,6 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		// Undo the commit and set old value
 		if oldItem != nil {
 			k.setOldItem(key, ttl, partID, item, oldItem, sAddrs)
-			oldItem.mu.Unlock()
 			return err
 		}
 		// TODO: remove the key/value from backups.
