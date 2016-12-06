@@ -17,8 +17,8 @@ func (k *KV) setBackup(key string, value []byte, ttl int64) error {
 	if !local {
 		return ErrWrongBackupMember
 	}
-	item, _ := k.backups.set(key, value, partID, ttl)
-	defer item.mu.Unlock()
+	i, _ := k.backups.set(key, value, partID, ttl)
+	defer i.mu.Unlock()
 	log.Debugf("Backup has been set for %s", key)
 	return nil
 }
@@ -34,5 +34,10 @@ func (k *KV) deleteBackup(key string) error {
 		return ErrWrongBackupMember
 	}
 	log.Debugf("Deleting %s from backup.", key)
-	return k.backups.delete(key, partID)
+	i, err := k.backups.delete(key, partID)
+	if err != nil {
+		return err
+	}
+	defer i.mu.Unlock()
+	return k.backups.deleteCommit(key, partID)
 }
