@@ -43,3 +43,9 @@
 [submodule "vendor/github.com/spaolacci/murmur3"]
 	path = vendor/github.com/spaolacci/murmur3
 	url = https://github.com/spaolacci/murmur3
+[submodule "vendor/github.com/purak/ghash"]
+	path = vendor/github.com/purak/ghash
+	url = https://github.com/purak/ghash
+[submodule "vendor/github.com/willf/bitset"]
+	path = vendor/github.com/willf/bitset
+	url = https://github.com/willf/bitset
