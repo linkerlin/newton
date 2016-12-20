@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/purak/newton/locker"
 	"github.com/purak/newton/partition"
 	"github.com/spaolacci/murmur3"
 )
@@ -17,6 +18,7 @@ type KV struct {
 	partitions   *partitions
 	transactions *transactions
 	backups      *partitions
+	locker       *locker.Locker
 	Grpc         *Grpc
 }
 
@@ -36,8 +38,8 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 		done:         make(chan struct{}),
 		partman:      p,
 		partitions:   parts,
-		backups:      backups,
 		transactions: transactions,
+		backups:      backups,
 	}
 
 	g := &Grpc{

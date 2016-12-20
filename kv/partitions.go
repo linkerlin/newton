@@ -3,6 +3,8 @@ package kv
 import (
 	"errors"
 	"sync"
+
+	"github.com/purak/ghash"
 )
 
 var ErrKeyNotFound = errors.New("No value found for given key")
@@ -24,49 +26,25 @@ type partitions struct {
 type kv struct {
 	mu sync.RWMutex
 
-	m map[string]*item
+	ghash *ghash.GHash
+	m     map[string]*item
 }
 
-func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) (*item, *item) {
+func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) error {
+	// Lock all kv store to find the responsible partition.
 	pt.mu.Lock()
 	part, ok := pt.m[partID]
 	if !ok {
+		gh, _ := ghash.New(nil)
+		// TODO: check the error.
 		part = &kv{
-			m: make(map[string]*item),
+			m:     make(map[string]*item),
+			ghash: gh,
 		}
 		pt.m[partID] = part
 	}
 	pt.mu.Unlock()
-
-	part.mu.Lock()
-
-	createNewRecord := func() *item {
-		ni := &item{
-			value: value,
-			ttl:   ttl,
-		}
-		ni.mu.Lock()
-		part.m[key] = ni
-		part.mu.Unlock()
-		return ni
-	}
-
-	i, ok := part.m[key]
-	if ok {
-		i.mu.Lock()
-		if i.stale {
-			// Partition is locked. So we can remove this key safely.
-			delete(part.m, key)
-		}
-
-		nr := createNewRecord()
-		if !i.stale {
-			return nr, i
-		}
-		i.mu.Unlock()
-		return nr, nil
-	}
-	return createNewRecord(), nil
+	return part.ghash.Insert(key, value)
 }
 
 func (pt *partitions) get(key string, partID int32) ([]byte, error) {

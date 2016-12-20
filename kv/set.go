@@ -71,43 +71,38 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return k.redirectSet(key, value, ttl, oAddr)
 	}
 
-	item, oldItem := k.partitions.set(key, value, partID, ttl)
-	defer func() {
-		item.mu.Unlock()
-		if oldItem != nil {
-			oldItem.mu.Unlock()
-		}
-	}()
-
 	addresses, err := k.partman.FindBackupOwners(partID)
 	if err == partition.ErrNoBackupMemberFound {
 		log.Debugf("No backup member found for Partition: %d", partID)
 		return nil
 	}
 	if err != nil {
-		// Something wrong with partition manager. It should be a rare incident in
-		// development phase and it shouldn't be encountered in production.
-		// Mark the item as stale.
-		item.stale = true
-		return err
-	}
-	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
-		// Stale item should be removed by garbage collector component of KV, if a client
-		// does not try to set the key again shortly after the failure.
-		item.stale = true
 		return err
 	}
 
-	sAddrs, err := k.tryToCommitTransactionForSet(addresses, key, partID)
-	if err != nil {
-		// Undo the commit and set old value
-		if oldItem != nil {
-			k.setOldItem(key, ttl, partID, item, oldItem, sAddrs)
-			return err
-		}
+	k.locker.Lock(key)
+	defer k.locker.Unlock(key)
+
+	if err := k.partitions.set(key, value, partID, ttl); err != nil {
 		// TODO: remove the key/value from backups.
 		return err
 	}
+
+	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
+		return err
+	}
+
+	_, err = k.tryToCommitTransactionForSet(addresses, key, partID)
+	if err != nil {
+		/*// Undo the commit and set old value
+		if oldItem != nil {
+			k.setOldItem(key, ttl, partID, item, oldItem, sAddrs)
+			return err
+		}*/
+		// TODO: remove the key/value from backups.
+		return err
+	}
+
 	return nil
 }
 
