@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/purak/ghash"
 	"github.com/purak/newton/log"
 
 	ksrv "github.com/purak/newton/proto/kv"
@@ -21,8 +22,8 @@ type tDelete struct {
 type transactions struct {
 	mu sync.RWMutex
 
-	set    map[int32]*kv
-	delete map[int32]*tDelete
+	set    map[int32]*ghash.GHash
+	delete map[int32]*ghash.GHash
 }
 
 func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32) error {
@@ -35,22 +36,18 @@ func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32
 	}
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
-	part, ok := k.transactions.set[partID]
+	gh, ok := k.transactions.set[partID]
 	if !ok {
-		part = &kv{
-			m: make(map[string]*item),
+		cfg := newDefaultGHashConfig()
+		gh, err := ghash.New(cfg)
+		if err != nil {
+			return err
 		}
-		k.transactions.set[partID] = part
+		k.transactions.set[partID] = gh
 	}
-	part.mu.Lock()
-	defer part.mu.Unlock()
 
-	part.m[key] = &item{
-		value: value,
-		ttl:   ttl,
-	}
 	log.Debugf("New transaction has been set for %s", key)
-	return nil
+	return gh.Insert(key, value)
 }
 
 func (k *KV) callTransactionForSetOn(address, key string, value []byte, partID int32) error {
@@ -75,23 +72,17 @@ func (k *KV) commitTransactionForSet(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
-	part := k.transactions.set[partID]
-	part.mu.Lock()
-	defer part.mu.Unlock()
-	i, ok := part.m[key]
-	if !ok {
-		return ErrKeyNotFound
+	gh := k.transactions.set[partID]
+	value, err := gh.Find(key)
+	if err != nil {
+		return err
 	}
-	if err := k.setBackup(key, i.value, i.ttl); err != nil {
+	if err := k.setBackup(key, value, 0); err != nil {
 		return err
 	}
 
 	// Clean garbage on transaction struct.
-	delete(part.m, key)
-	if len(part.m) == 0 {
-		delete(k.transactions.set, partID)
-	}
-
+	// TODO: Add Len() method to ghash
 	log.Debugf("Transaction has been committed for %s", key)
 	return nil
 }
@@ -116,17 +107,15 @@ func (k *KV) callCommitTransactionForSetOn(address, key string, partID int32) er
 func (k *KV) rollbackTransactionForSet(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
-	part, ok := k.transactions.set[partID]
+	gh, ok := k.transactions.set[partID]
 	if !ok {
 		return ErrPartitionNotFound
 	}
 
-	part.mu.Lock()
-	defer part.mu.Unlock()
-	delete(part.m, key)
-	if len(part.m) == 0 {
-		delete(k.transactions.set, partID)
+	if err := gh.Delete(key); err != nil {
+		return err
 	}
+	// TODO: Add Len() method to ghash
 	log.Debugf("Set transaction has been deleted(rollback) for %s", key)
 	return nil
 }
@@ -159,17 +148,17 @@ func (k *KV) transactionForDelete(key string, partID int32) error {
 
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
-	part, ok := k.transactions.delete[partID]
+	gh, ok := k.transactions.delete[partID]
 	if !ok {
-		part = &tDelete{
-			m: make(map[string]struct{}),
+		cfg := newDefaultGHashConfig()
+		gh, err := ghash.New(cfg)
+		if err != nil {
+			return err
 		}
-		k.transactions.delete[partID] = part
+		k.transactions.delete[partID] = gh
 	}
-	part.mu.Lock()
-	defer part.mu.Unlock()
-	part.m[key] = struct{}{}
-	return nil
+	// TODO: Add nil value support to GHash
+	return gh.Insert(key, []byte{})
 }
 
 func (k *KV) callTransactionForDeleteOn(address, key string, partID int32) error {
@@ -193,23 +182,20 @@ func (k *KV) commitTransactionForDelete(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
-	part, ok := k.transactions.delete[partID]
+	gh, ok := k.transactions.delete[partID]
 	if !ok {
 		return ErrPartitionNotFound
 	}
-	part.mu.Lock()
-	defer part.mu.Unlock()
-	if _, ok := part.m[key]; !ok {
-		return ErrKeyNotFound
+	// TODO: add an "IsExist" method to GHash
+	if _, err := gh.Find(key); err != nil {
+		return err
 	}
 	if err := k.deleteBackup(key); err != nil {
 		return err
 	}
-	delete(part.m, key)
-	if len(part.m) == 0 {
-		delete(k.transactions.delete, partID)
-	}
-	return nil
+
+	// TODO: Add Len() method to ghash
+	return gh.Delete(key)
 }
 
 func (k *KV) callCommitTransactionForDeleteOn(address, key string, partID int32) error {
@@ -233,22 +219,17 @@ func (k *KV) rollbackTransactionForDelete(key string, partID int32) error {
 	k.transactions.mu.Lock()
 	defer k.transactions.mu.Unlock()
 
-	part, ok := k.transactions.delete[partID]
+	gh, ok := k.transactions.delete[partID]
 	if !ok {
 		return ErrPartitionNotFound
 	}
-	part.mu.Lock()
-	defer part.mu.Unlock()
-	if _, ok := part.m[key]; !ok {
-		return ErrKeyNotFound
-	}
-	delete(part.m, key)
-	if len(part.m) == 0 {
-		delete(k.transactions.delete, partID)
+	if _, err := gh.Find(key); err != nil {
+		return err
 	}
 
 	log.Debugf("Delete transaction has been deleted(rollback) for %s", key)
-	return nil
+	// TODO: Add Len() method to ghash
+	return gh.Delete(key)
 }
 
 func (k *KV) callRollbackTransactionForDeleteOn(address, key string, partID int32) error {

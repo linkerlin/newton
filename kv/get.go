@@ -16,6 +16,9 @@ func (k *KV) Get(key string) ([]byte, error) {
 	if !local {
 		return k.redirectGet(key, oAddr)
 	}
+	k.locker.Lock(key)
+	defer k.locker.Unlock(key)
+
 	return k.partitions.get(key, partID)
 }
 

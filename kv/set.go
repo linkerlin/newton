@@ -72,11 +72,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	}
 
 	addresses, err := k.partman.FindBackupOwners(partID)
-	if err == partition.ErrNoBackupMemberFound {
-		log.Debugf("No backup member found for Partition: %d", partID)
-		return nil
-	}
-	if err != nil {
+	if err != nil && err != partition.ErrNoBackupMemberFound {
 		return err
 	}
 
@@ -88,7 +84,13 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return err
 	}
 
-	if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
+	if err == partition.ErrNoBackupMemberFound {
+		// This should be a standalone instance.
+		log.Debugf("No backup member found for Partition: %d", partID)
+		return nil
+	}
+
+	if err = k.startTransactionForSet(addresses, partID, key, value); err != nil {
 		return err
 	}
 

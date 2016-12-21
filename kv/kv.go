@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/purak/ghash"
 	"github.com/purak/newton/locker"
 	"github.com/purak/newton/partition"
 	"github.com/spaolacci/murmur3"
@@ -24,14 +25,14 @@ type KV struct {
 
 func New(p *partition.Partition, router *httprouter.Router) *KV {
 	parts := &partitions{
-		m: make(map[int32]*kv),
+		m: make(map[int32]*ghash.GHash),
 	}
 	backups := &partitions{
-		m: make(map[int32]*kv),
+		m: make(map[int32]*ghash.GHash),
 	}
 	transactions := &transactions{
-		set:    make(map[int32]*kv),
-		delete: make(map[int32]*tDelete),
+		set:    make(map[int32]*ghash.GHash),
+		delete: make(map[int32]*ghash.GHash),
 	}
 
 	k := &KV{
@@ -40,6 +41,7 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 		partitions:   parts,
 		transactions: transactions,
 		backups:      backups,
+		locker:       locker.New(),
 	}
 
 	g := &Grpc{
@@ -70,10 +72,18 @@ func (k *KV) Stop() {
 
 func getPartitionID(key string) int32 {
 	data := []byte(key)
-	hasher := murmur3.New64()
-	hasher.Write(data)
-	h := hasher.Sum64()
+	h := murmur3.Sum64(data)
 	// TODO: Get partition count from configuration
 	partID := h % 23
 	return int32(partID)
+}
+
+func newDefaultGHashConfig() *ghash.Config {
+	return &ghash.Config{
+		Hasher: hasher{},
+		// In bytes
+		InitialGroupSize:  256,
+		InitialGroupCount: 32,
+		ShardCount:        31,
+	}
 }

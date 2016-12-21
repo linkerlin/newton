@@ -33,10 +33,9 @@ func (k *KV) deleteBackup(key string) error {
 		return ErrWrongBackupMember
 	}
 	log.Debugf("Deleting %s from backup.", key)
-	i, err := k.backups.delete(key, partID)
+	err = k.backups.delete(key, partID)
 	if err != nil {
 		return err
 	}
-	defer i.mu.Unlock()
 	return k.backups.deleteCommit(key, partID)
 }

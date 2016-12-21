@@ -52,16 +52,18 @@ func (k *KV) Delete(key string) error {
 		return k.redirectDelete(key, oAddr)
 	}
 
+	k.locker.Lock(key)
+	defer k.locker.Unlock(key)
+
 	ms, err := k.partman.FindBackupOwners(partID)
 	if err != nil {
 		return err
 	}
 
-	i, err := k.partitions.delete(key, partID)
+	err = k.partitions.delete(key, partID)
 	if err != nil {
 		return err
 	}
-	defer i.mu.Unlock()
 
 	// Start a new transaction and undo it if one of the participants of partition sends negative acknowledgement.
 	s := []string{}
@@ -71,7 +73,6 @@ func (k *KV) Delete(key string) error {
 			// Undo transaction for delete. It should remove the transaction from cluster
 			// if the underlying partition manager works consistently.
 			k.undoTransactionForDelete(s, key, partID)
-			i.stale = false
 			return err
 		}
 		s = append(s, bAddr)
@@ -83,8 +84,7 @@ func (k *KV) Delete(key string) error {
 		if err := k.callCommitTransactionForDeleteOn(bAddr, key, partID); err != nil {
 			// re-set the key.
 			log.Debugf("Commit operation on delete transaction failed on key: %s Re-setting the old value: %s", key, err)
-			k.setOldItem(key, i.ttl, partID, i, i, c)
-			i.stale = false
+			//k.setOldItem(key, i.ttl, partID, i, i, c)
 			return err
 		}
 		c = append(c, bAddr)
