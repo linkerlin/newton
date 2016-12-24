@@ -176,13 +176,15 @@ func (k *KV) commitTransactionForDelete(key string, partID int32) error {
 	if !ok {
 		return ErrPartitionNotFound
 	}
-	// TODO: add an "IsExist" method to GHash
-	if _, err := gh.Find(key); err != nil {
+	if err := gh.Check(key); err != nil {
+		// Warn the caller if you don't have the key in your transaction store
 		return err
 	}
+	// Remove it from backup.
 	if err := k.deleteBackup(key); err != nil {
 		return err
 	}
+	// Remove it from transaction store.
 	return gh.Delete(key)
 }
 
@@ -211,7 +213,7 @@ func (k *KV) rollbackTransactionForDelete(key string, partID int32) error {
 	if !ok {
 		return ErrPartitionNotFound
 	}
-	if _, err := gh.Find(key); err != nil {
+	if err := gh.Check(key); err != nil {
 		return err
 	}
 

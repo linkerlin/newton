@@ -61,3 +61,14 @@ func (pt *partitions) delete(key string, partID int32) error {
 	}
 	return gh.Delete(key)
 }
+
+func (pt *partitions) check(key string, partID int32) error {
+	pt.mu.RLock()
+	gh, ok := pt.m[partID]
+	pt.mu.RUnlock()
+	if !ok {
+		// Partition could not be found for that key.
+		return ErrPartitionNotFound
+	}
+	return gh.Check(key)
+}

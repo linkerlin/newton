@@ -60,7 +60,10 @@ func (k *KV) Delete(key string) error {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
-	// TODO: check key existence first.
+	// Ignore to run if given key doesn't exist in data store.
+	if k.partitions.check(key, partID); err != nil {
+		return err
+	}
 
 	addresses, err := k.partman.FindBackupOwners(partID)
 	if err == partition.ErrNoBackupMemberFound {
