@@ -71,41 +71,33 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return k.redirectSet(key, value, ttl, oAddr)
 	}
 
-	addresses, err := k.partman.FindBackupOwners(partID)
-	if err != nil && err != partition.ErrNoBackupMemberFound {
-		return err
-	}
-
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
-	if err := k.partitions.set(key, value, partID, ttl); err != nil {
-		// TODO: remove the key/value from backups.
-		return err
-	}
-
+	addresses, err := k.partman.FindBackupOwners(partID)
 	if err == partition.ErrNoBackupMemberFound {
-		// This should be a standalone instance.
-		log.Debugf("No backup member found for Partition: %d", partID)
-		return nil
+		return k.partitions.set(key, value, partID)
+	}
+	if err != nil {
+		return err
 	}
 
 	if err = k.startTransactionForSet(addresses, partID, key, value); err != nil {
 		return err
 	}
 
-	_, err = k.tryToCommitTransactionForSet(addresses, key, partID)
+	sAddrs, err := k.tryToCommitTransactionForSet(addresses, key, partID)
 	if err != nil {
-		/*// Undo the commit and set old value
-		if oldItem != nil {
-			k.setOldItem(key, ttl, partID, item, oldItem, sAddrs)
-			return err
-		}*/
+		// Undo the commit and set old value
+		currentValue, gErr := k.partitions.get(key, partID)
+		if gErr == nil {
+			k.setOldValue(key, currentValue, partID, sAddrs)
+		}
 		// TODO: remove the key/value from backups.
 		return err
 	}
-
-	return nil
+	// FIXME: set may return an error about memory allocation.
+	return k.partitions.set(key, value, partID)
 }
 
 func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID int32) ([]string, error) {
@@ -142,16 +134,12 @@ func (k *KV) clearParticipantList(addresses, failed []string, partID int32) ([]s
 	return tmp, failed
 }
 
-func (k *KV) setOldItem(key string, ttl int64, partID int32, item *item, oldItem *item, addresses []string) {
-	// Set old value and TTL on local item.
-	item.value = oldItem.value
-	item.ttl = ttl
-
+func (k *KV) setOldValue(key string, value []byte, partID int32, addresses []string) {
 	for {
 		failed := []string{}
 		addresses, failed = k.clearParticipantList(addresses, failed, partID)
-		if err := k.startTransactionForSet(addresses, partID, key, item.value); err != nil {
-			log.Errorf("Failed to set a new transaction to set the old item again: %s", err)
+		if err := k.startTransactionForSet(addresses, partID, key, value); err != nil {
+			log.Errorf("Failed to set a new transaction to set the old value again: %s", err)
 			// If one of the participant nodes removed from the list, the above loop will catch
 			// this event and remove immediately it from the list. A fresh transaction will eventually
 			// be started for this operation.

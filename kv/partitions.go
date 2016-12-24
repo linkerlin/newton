@@ -17,21 +17,13 @@ func (h hasher) Sum64(key string) uint64 {
 
 var ErrKeyNotFound = errors.New("No value found for given key")
 
-type item struct {
-	mu sync.RWMutex
-
-	value []byte
-	ttl   int64
-	stale bool
-}
-
 type partitions struct {
 	mu sync.RWMutex
 
 	m map[int32]*ghash.GHash
 }
 
-func (pt *partitions) set(key string, value []byte, partID int32, ttl int64) error {
+func (pt *partitions) set(key string, value []byte, partID int32) error {
 	var err error
 	// Lock all kv store to find the responsible partition.
 	pt.mu.Lock()

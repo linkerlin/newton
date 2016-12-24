@@ -82,7 +82,7 @@ func newDefaultGHashConfig() *ghash.Config {
 	return &ghash.Config{
 		Hasher: hasher{},
 		// In bytes
-		InitialGroupSize:  256,
+		InitialGroupSize:  1024,
 		InitialGroupCount: 32,
 		ShardCount:        31,
 	}

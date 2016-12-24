@@ -13,12 +13,6 @@ import (
 
 var ErrPartitionNotFound = errors.New("Partition not found")
 
-type tDelete struct {
-	mu sync.RWMutex
-
-	m map[string]struct{}
-}
-
 type transactions struct {
 	mu sync.RWMutex
 
@@ -39,13 +33,12 @@ func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32
 	gh, ok := k.transactions.set[partID]
 	if !ok {
 		cfg := newDefaultGHashConfig()
-		gh, err := ghash.New(cfg)
+		gh, err = ghash.New(cfg)
 		if err != nil {
 			return err
 		}
 		k.transactions.set[partID] = gh
 	}
-
 	log.Debugf("New transaction has been set for %s", key)
 	return gh.Insert(key, value)
 }
@@ -82,7 +75,6 @@ func (k *KV) commitTransactionForSet(key string, partID int32) error {
 	}
 
 	// Clean garbage on transaction struct.
-	// TODO: Add Len() method to ghash
 	log.Debugf("Transaction has been committed for %s", key)
 	return nil
 }
@@ -115,7 +107,6 @@ func (k *KV) rollbackTransactionForSet(key string, partID int32) error {
 	if err := gh.Delete(key); err != nil {
 		return err
 	}
-	// TODO: Add Len() method to ghash
 	log.Debugf("Set transaction has been deleted(rollback) for %s", key)
 	return nil
 }
