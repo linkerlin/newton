@@ -61,7 +61,3 @@ func (pt *partitions) delete(key string, partID int32) error {
 	}
 	return gh.Delete(key)
 }
-
-func (pt *partitions) deleteCommit(key string, partID int32) error {
-	return nil
-}

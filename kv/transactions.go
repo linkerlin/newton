@@ -121,7 +121,7 @@ func (k *KV) callRollbackTransactionForSetOn(address, key string, partID int32) 
 		Key:         key,
 		PartitionID: partID,
 	}
-	_, err = c.CommitTransactionForSet(context.Background(), sr)
+	_, err = c.RollbackTransactionForSet(context.Background(), sr)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,6 @@ func (k *KV) transactionForDelete(key string, partID int32) error {
 		}
 		k.transactions.delete[partID] = gh
 	}
-	// TODO: Add nil value support to GHash
 	return gh.Insert(key, []byte{})
 }
 
@@ -184,8 +183,6 @@ func (k *KV) commitTransactionForDelete(key string, partID int32) error {
 	if err := k.deleteBackup(key); err != nil {
 		return err
 	}
-
-	// TODO: Add Len() method to ghash
 	return gh.Delete(key)
 }
 
@@ -219,7 +216,6 @@ func (k *KV) rollbackTransactionForDelete(key string, partID int32) error {
 	}
 
 	log.Debugf("Delete transaction has been deleted(rollback) for %s", key)
-	// TODO: Add Len() method to ghash
 	return gh.Delete(key)
 }
 

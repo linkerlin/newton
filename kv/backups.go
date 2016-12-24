@@ -37,5 +37,5 @@ func (k *KV) deleteBackup(key string) error {
 	if err != nil {
 		return err
 	}
-	return k.backups.deleteCommit(key, partID)
+	return k.backups.delete(key, partID)
 }
