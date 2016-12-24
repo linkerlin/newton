@@ -154,7 +154,7 @@ func (p *Partition) FindPartitionOwner(partID int32) (string, bool, error) {
 	return rm, false, nil
 }
 
-func (p *Partition) FindBackupOwners(partID int32) ([]string, error) {
+func (p *Partition) FindBackupMembers(partID int32) ([]string, error) {
 	partitionTableLock.RLock()
 	defer partitionTableLock.RUnlock()
 	b, ok := p.table.Backups[partID]
@@ -165,8 +165,8 @@ func (p *Partition) FindBackupOwners(partID int32) ([]string, error) {
 	return []string{b}, nil
 }
 
-func (p *Partition) IsBackupOwner(partID int32, address string) (bool, error) {
-	mm, err := p.FindBackupOwners(partID)
+func (p *Partition) IsBackupMember(partID int32, address string) (bool, error) {
+	mm, err := p.FindBackupMembers(partID)
 	if err != nil {
 		return false, err
 	}
@@ -179,8 +179,8 @@ func (p *Partition) IsBackupOwner(partID int32, address string) (bool, error) {
 	return false, nil
 }
 
-func (p *Partition) AmIBackupOwner(partID int32) (bool, error) {
-	mm, err := p.FindBackupOwners(partID)
+func (p *Partition) AmIBackupMember(partID int32) (bool, error) {
+	mm, err := p.FindBackupMembers(partID)
 	if err != nil {
 		return false, err
 	}

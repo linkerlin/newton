@@ -11,7 +11,7 @@ import (
 func (k *KV) tryUndoTransactionForDelete(addresses []string, key string, partID int32) []string {
 	tmp := []string{}
 	for _, address := range addresses {
-		ok, err := k.partman.IsBackupOwner(partID, address)
+		ok, err := k.partman.IsBackupMember(partID, address)
 		if err != nil {
 			log.Errorf("Error while validating backup owner: %s", err)
 			// Retry this. This should be an inconsistency in partition table
@@ -65,7 +65,7 @@ func (k *KV) Delete(key string) error {
 		return err
 	}
 
-	addresses, err := k.partman.FindBackupOwners(partID)
+	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
 		return k.partitions.delete(key, partID)
 	}

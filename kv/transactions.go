@@ -21,7 +21,7 @@ type transactions struct {
 }
 
 func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32) error {
-	ok, err := k.partman.AmIBackupOwner(partID)
+	ok, err := k.partman.AmIBackupMember(partID)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func (k *KV) callRollbackTransactionForSetOn(address, key string, partID int32) 
 }
 
 func (k *KV) transactionForDelete(key string, partID int32) error {
-	ok, err := k.partman.AmIBackupOwner(partID)
+	ok, err := k.partman.AmIBackupMember(partID)
 	if err != nil {
 		return err
 	}

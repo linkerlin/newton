@@ -12,7 +12,7 @@ import (
 func (k *KV) tryUndoTransactionForSet(addresses []string, key string, partID int32) []string {
 	tmp := []string{}
 	for _, address := range addresses {
-		ok, err := k.partman.IsBackupOwner(partID, address)
+		ok, err := k.partman.IsBackupMember(partID, address)
 		if err != nil {
 			log.Errorf("Error while validating backup owner: %s", err)
 			// Retry this. This should be an inconsistency in partition table
@@ -80,7 +80,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	defer k.locker.Unlock(key)
 
 	// FIXME: k.partitions.set may return an error about memory allocation.
-	addresses, err := k.partman.FindBackupOwners(partID)
+	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
 		return k.partitions.set(key, value, partID)
 	}
@@ -130,7 +130,7 @@ func (k *KV) clearParticipantList(addresses, failed []string, partID int32) ([]s
 	tmp := []string{}
 	// We need to keep participant list of the partition clean.
 	for _, bAddr := range addresses {
-		ok, err := k.partman.IsBackupOwner(partID, bAddr)
+		ok, err := k.partman.IsBackupMember(partID, bAddr)
 		if err != nil {
 			log.Errorf("Error while validating backup owner: %s", err)
 			// Retry this. This should be an inconsistency in partition table
