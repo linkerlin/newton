@@ -39,7 +39,7 @@ func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32
 		}
 		k.transactions.set[partID] = gh
 	}
-	log.Debugf("New transaction has been set for %s", key)
+	log.Debugf("New transaction has being commited for %s", key)
 	return gh.Insert(key, value)
 }
 
@@ -73,10 +73,8 @@ func (k *KV) commitTransactionForSet(key string, partID int32) error {
 	if err := k.setBackup(key, value, 0); err != nil {
 		return err
 	}
-
-	// Clean garbage on transaction struct.
 	log.Debugf("Transaction has been committed for %s", key)
-	return nil
+	return gh.Delete(key)
 }
 
 func (k *KV) callCommitTransactionForSetOn(address, key string, partID int32) error {
@@ -103,12 +101,8 @@ func (k *KV) rollbackTransactionForSet(key string, partID int32) error {
 	if !ok {
 		return ErrPartitionNotFound
 	}
-
-	if err := gh.Delete(key); err != nil {
-		return err
-	}
-	log.Debugf("Set transaction has been deleted(rollback) for %s", key)
-	return nil
+	log.Debugf("Set transaction has being deleted(rollback) for %s", key)
+	return gh.Delete(key)
 }
 
 func (k *KV) callRollbackTransactionForSetOn(address, key string, partID int32) error {
@@ -217,7 +211,7 @@ func (k *KV) rollbackTransactionForDelete(key string, partID int32) error {
 		return err
 	}
 
-	log.Debugf("Delete transaction has been deleted(rollback) for %s", key)
+	log.Debugf("Delete transaction has being deleted(rollback) for %s", key)
 	return gh.Delete(key)
 }
 
@@ -231,7 +225,7 @@ func (k *KV) callRollbackTransactionForDeleteOn(address, key string, partID int3
 		Key:         key,
 		PartitionID: partID,
 	}
-	_, err = c.CommitTransactionForDelete(context.Background(), sr)
+	_, err = c.RollbackTransactionForDelete(context.Background(), sr)
 	if err != nil {
 		return err
 	}
