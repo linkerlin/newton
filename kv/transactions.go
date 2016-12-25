@@ -142,7 +142,7 @@ func (k *KV) transactionForDelete(key string, partID int32) error {
 		}
 		k.transactions.delete[partID] = gh
 	}
-	return gh.Insert(key, []byte{})
+	return gh.Insert(key, nil)
 }
 
 func (k *KV) callTransactionForDeleteOn(address, key string, partID int32) error {
