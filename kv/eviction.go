@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type gcRoutines struct {
+type eviction struct {
 	mu sync.RWMutex
 
 	m map[int32]chan struct{}
@@ -19,7 +19,7 @@ func (k *KV) garbageCollector() {
 
 }
 
-func (k *KV) garbageCollectionOnPartition(partID int32, done chan struct{}) {
+func (k *KV) applyEvictionPolicy(partID int32, done chan struct{}) {
 	defer k.waitGroup.Done()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

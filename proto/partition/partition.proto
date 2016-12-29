@@ -39,4 +39,5 @@ message PartitionTable {
   map<int32, string> backups = 3;
   map<string, BackupPartitionsOfMember> backupPartitionsOfMember = 4;
   repeated Member sorted = 5;
+  int64 clusterTime = 6;
 }

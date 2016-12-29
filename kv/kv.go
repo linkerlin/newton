@@ -19,6 +19,7 @@ type KV struct {
 	partitions   *partitions
 	transactions *transactions
 	backups      *partitions
+	time         *clusterTime
 	locker       *locker.Locker
 	Grpc         *Grpc
 }
@@ -41,8 +42,10 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 		partitions:   parts,
 		transactions: transactions,
 		backups:      backups,
+		time:         &clusterTime{},
 		locker:       locker.New(),
 	}
+	k.time.insertClusterTime(p.GetClusterTime())
 
 	g := &Grpc{
 		kv: k,

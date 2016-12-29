@@ -16,7 +16,6 @@ const partitionCount int32 = 23
 
 var (
 	partitionTableLock     sync.RWMutex
-	errPartitionTableSet   = errors.New("Failed to set partition table")
 	ErrNoBackupMemberFound = errors.New("Invalid partition ID")
 )
 
@@ -90,11 +89,12 @@ func (p *Partition) createPartitionTable() {
 }
 
 func (p *Partition) pushPartitionTable() error {
+	p.table.ClusterTime = clockMonotonicRaw()
 	var g errgroup.Group
 	for _, item := range p.table.Sorted {
 		addr := item.Address
 		if addr == p.config.Address {
-			// Dont send that message yourself.
+			// Don't send that message yourself.
 			continue
 		}
 
@@ -191,4 +191,10 @@ func (p *Partition) AmIBackupMember(partID int32) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (p *Partition) GetClusterTime() int64 {
+	partitionTableLock.RLock()
+	defer partitionTableLock.RUnlock()
+	return p.table.ClusterTime
 }
