@@ -54,7 +54,8 @@ func (f *fifo) add(key []byte) (uint64, error) {
 			return 0, err
 		}
 	}
-	copy(f.array[f.offset:f.offset+1], []byte(uint8(keyLen)))
+	sizeHeader := []byte{uint8(keyLen)}
+	copy(f.array[f.offset:f.offset+1], sizeHeader)
 	copy(f.array[f.offset:end], key)
 	pos := f.offset
 	f.offset += keyLen
@@ -94,7 +95,7 @@ func (f *fifo) truncate(count int) error {
 	localOffset := f.emptyBytes
 	i := 0
 	for i < count {
-		size := uint64(f.array[f.emptyBytes : f.emptyBytes+1])
+		size := uint64(uint8(f.array[f.emptyBytes : f.emptyBytes+1][0]))
 		key := f.array[localOffset+1:localOffset+size]
 		f.delete(key, localOffset)
 		localOffset += size
