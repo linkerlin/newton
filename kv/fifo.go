@@ -1,6 +1,9 @@
 package kv
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type fifo struct {
 	mu sync.Mutex
@@ -40,6 +43,10 @@ func (f *fifo) resize() error {
 
 func (f *fifo) add(key []byte) (uint64, error) {
 	keyLen := uint64(len(key))
+	if keyLen >= 256 {
+		return 0, errors.New("key is too long")
+	}
+	keyLen += 1
 	end := f.offset + keyLen
 	if uint64(len(f.array)) <= end {
 		err := f.resize()
@@ -47,13 +54,15 @@ func (f *fifo) add(key []byte) (uint64, error) {
 			return 0, err
 		}
 	}
+	copy(f.array[f.offset:f.offset+1], []byte(uint8(keyLen)))
 	copy(f.array[f.offset:end], key)
+	pos := f.offset
 	f.offset += keyLen
-	return f.offset + f.correctionFactor, nil
+	return pos + f.correctionFactor, nil
 }
 
 func (f *fifo) delete(key []byte, pos uint64) {
-	keyLen := uint64(len(key))
+	keyLen := uint64(len(key)) + 1
 	end := pos + keyLen
 	garb := make([]byte, keyLen)
 	copy(f.array[f.offset:end], garb)
@@ -73,4 +82,23 @@ func (f *fifo) moveToBack(key []byte, pos uint64) (uint64, error) {
 	defer f.mu.Unlock()
 	f.delete(key, pos)
 	return f.add(key)
+}
+
+func (f *fifo) truncate(count int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if count == 0 {
+		count = 1
+	}
+	localOffset := f.emptyBytes
+	i := 0
+	for i < count {
+		size := uint64(f.array[f.emptyBytes : f.emptyBytes+1])
+		key := f.array[localOffset+1:localOffset+size]
+		f.delete(key, localOffset)
+		localOffset += size
+		i++
+	}
+	return f.resize()
 }
