@@ -1,15 +1,15 @@
 package kv
 
 import (
-	"time"
-	"sync"
 	"errors"
+	"sync"
+	"time"
 )
 
 type clusterTime struct {
 	mu sync.RWMutex
 
-	base int64
+	base  int64
 	start int64
 }
 

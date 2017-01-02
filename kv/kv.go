@@ -57,9 +57,6 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 	router.GET("/kv/:key", k.getHandler)
 	router.DELETE("/kv/:key", k.deleteHandler)
 
-	k.waitGroup.Add(1)
-	k.garbageCollector()
-
 	return k
 }
 
