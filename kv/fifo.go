@@ -1,8 +1,8 @@
 package kv
 
 import (
-	"errors"
 	"sync"
+	"errors"
 )
 
 type fifo struct {
@@ -41,65 +41,62 @@ func (f *fifo) resize() error {
 	return nil
 }
 
-func (f *fifo) add(key []byte) (uint64, error) {
-	keyLen := uint64(len(key))
-	if keyLen >= 256 {
-		return 0, errors.New("key is too long")
+func (f *fifo) add(item []byte) (uint64, error) {
+	itemLen := uint64(len(item))
+	if itemLen >= 256 {
+		return 0, errors.New("item is too long")
 	}
-	keyLen += 1
-	end := f.offset + keyLen
+	dataLen := itemLen + 1
+	end := f.offset + dataLen
 	if uint64(len(f.array)) <= end {
 		err := f.resize()
 		if err != nil {
 			return 0, err
 		}
 	}
-	sizeHeader := []byte{uint8(keyLen)}
+	sizeHeader := []byte{uint8(itemLen)}
 	copy(f.array[f.offset:f.offset+1], sizeHeader)
-	copy(f.array[f.offset:end], key)
+	copy(f.array[f.offset+1:end], item)
 	pos := f.offset
-	f.offset += keyLen
+	f.offset += dataLen
 	return pos + f.correctionFactor, nil
 }
 
-func (f *fifo) delete(key []byte, pos uint64) {
-	keyLen := uint64(len(key)) + 1
-	end := pos + keyLen
-	garb := make([]byte, keyLen)
-	copy(f.array[f.offset:end], garb)
+func (f *fifo) drop(item []byte, pos uint64) {
+	dataLen := uint64(len(item)) + 1
+	end := pos + dataLen
+	garb := make([]byte, dataLen)
+	copy(f.array[pos:end], garb)
 	if pos == f.emptyBytes {
-		f.emptyBytes += pos
+		f.emptyBytes += dataLen
 	}
 }
 
-func (f *fifo) pushBack(key []byte) (uint64, error) {
+func (f *fifo) pushBack(item []byte) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.add(key)
+	return f.add(item)
 }
 
-func (f *fifo) moveToBack(key []byte, pos uint64) (uint64, error) {
+func (f *fifo) moveToBack(item []byte, pos uint64) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.delete(key, pos)
-	return f.add(key)
+	f.drop(item, pos)
+	return f.add(item)
 }
 
-func (f *fifo) truncate(count int) error {
+func (f *fifo) pop() []byte {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if count == 0 {
-		count = 1
+	rawSize := f.array[f.emptyBytes]
+	size := uint64(rawSize)
+	if size == 0 {
+		return nil
 	}
-	localOffset := f.emptyBytes
-	i := 0
-	for i < count {
-		size := uint64(uint8(f.array[f.emptyBytes : f.emptyBytes+1][0]))
-		key := f.array[localOffset+1:localOffset+size]
-		f.delete(key, localOffset)
-		localOffset += size
-		i++
-	}
-	return f.resize()
+	item := f.array[f.emptyBytes+1 : f.emptyBytes+size+1]
+	ret := make([]byte, len(item))
+	copy(ret, item)
+	f.drop(item, f.emptyBytes)
+	return ret
 }
