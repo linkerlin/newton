@@ -5,6 +5,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/purak/ghash"
+	"github.com/purak/newton/config"
 	"github.com/purak/newton/locker"
 	"github.com/purak/newton/partition"
 	"github.com/spaolacci/murmur3"
@@ -12,10 +13,12 @@ import (
 
 // KV defines a distributed key-value store.
 type KV struct {
+	config    *config.KV
 	waitGroup sync.WaitGroup
 	done      chan struct{}
 	partman   *partition.Partition
 
+	eviction     eviction
 	partitions   *partitions
 	transactions *transactions
 	backups      *partitions
@@ -24,7 +27,7 @@ type KV struct {
 	Grpc         *Grpc
 }
 
-func New(p *partition.Partition, router *httprouter.Router) *KV {
+func New(cfg *config.KV, p *partition.Partition, router *httprouter.Router) *KV {
 	parts := &partitions{
 		m: make(map[int32]*ghash.GHash),
 	}
@@ -37,6 +40,7 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 	}
 
 	k := &KV{
+		config:       cfg,
 		done:         make(chan struct{}),
 		partman:      p,
 		partitions:   parts,
@@ -46,6 +50,12 @@ func New(p *partition.Partition, router *httprouter.Router) *KV {
 		locker:       locker.New(),
 	}
 	k.time.insertClusterTime(p.GetClusterTime())
+
+	if k.config.EvictionPolicy == "lru" {
+		k.eviction = eviction{
+			lru: lru{partitions: make(map[int32]*fifo)},
+		}
+	}
 
 	g := &Grpc{
 		kv: k,

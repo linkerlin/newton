@@ -110,7 +110,7 @@ func New(cfg *config.Config) (*Newton, error) {
 	}
 
 	router := httprouter.New()
-	kvStore := kv.New(partman, router)
+	kvStore := kv.New(&cfg.KV, partman, router)
 	n := &Newton{
 		router:                 router,
 		kv:                     kvStore,

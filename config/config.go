@@ -53,12 +53,18 @@ type Newton struct {
 	DataTransferBurstLimit string   `yaml:"dataTransferBurstLimit"`
 }
 
-// DHT contains configuration items which are related to DHT node.
+// Partition contains configuration items which are related to DHT node.
 type Partition struct {
 	Common
 	Multicast
 	Unicast
 	Address string `yaml:"address"`
+}
+
+type KV struct {
+	EvictionPolicy     string `yaml:"eviction_policy"`
+	EvictionPercentage int    `yaml:"eviction_percentage"`
+	MaxSize            uint64 `yaml:"max_size"`
 }
 
 type Multicast struct {
@@ -85,6 +91,7 @@ type Config struct {
 	Partition
 	Unicast
 	Multicast
+	KV
 }
 
 // New creates a new configuration object

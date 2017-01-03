@@ -53,3 +53,7 @@ unicast:
   peers:
     - 192.168.2.1:46523
 
+kv:
+  eviction_policy: lru
+  eviction_percentage: 25
+  max_size: 1000

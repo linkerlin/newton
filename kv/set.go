@@ -79,6 +79,16 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
+	if k.config.EvictionPolicy == evictionLRU {
+		// TODO: Check key existence and pushBack or moveToBack
+		_, err := k.eviction.lru.pushBack([]byte(key), partID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// TODO: remove key from fifo if the operation fails.
+
 	// FIXME: k.partitions.set may return an error about memory allocation.
 	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
