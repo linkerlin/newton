@@ -1,6 +1,8 @@
 package kv
 
 import (
+	"encoding/binary"
+
 	"golang.org/x/net/context"
 
 	ksrv "github.com/purak/newton/proto/kv"
@@ -19,7 +21,30 @@ func (k *KV) Get(key string) ([]byte, error) {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
-	return k.partitions.get(key, partID)
+	// We have the key. So you can update eviction data.
+	if k.config.EvictionPolicy == evictionLRU {
+		if err = k.partitions.check(key, partID); err != nil {
+			return nil, err
+		}
+
+		pos, err := k.setLRUItem(key, partID)
+		if err != nil {
+			return nil, err
+		}
+		// Update bookkeeping data
+		rrange := "-8"
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, pos)
+		if err = k.partitions.modify(key, rrange, bs, partID); err != nil {
+			return nil, err
+		}
+		value, err := k.partitions.find(key, partID)
+		if err != nil {
+			return nil, err
+		}
+		return value[:len(value)-8], nil
+	}
+	return k.partitions.find(key, partID)
 }
 
 func (k *KV) redirectGet(key, oAddr string) ([]byte, error) {

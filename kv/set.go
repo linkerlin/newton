@@ -1,6 +1,8 @@
 package kv
 
 import (
+	"encoding/binary"
+
 	"github.com/purak/newton/log"
 	"github.com/purak/newton/partition"
 	"golang.org/x/net/context"
@@ -80,19 +82,19 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	defer k.locker.Unlock(key)
 
 	if k.config.EvictionPolicy == evictionLRU {
-		// TODO: Check key existence and pushBack or moveToBack
-		_, err := k.eviction.lru.pushBack([]byte(key), partID)
+		pos, err := k.setLRUItem(key, partID)
 		if err != nil {
 			return err
 		}
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, pos)
+		value = append(value, bs...)
 	}
-
-	// TODO: remove key from fifo if the operation fails.
 
 	// FIXME: k.partitions.set may return an error about memory allocation.
 	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
-		return k.partitions.set(key, value, partID)
+		return k.partitions.insert(key, value, partID)
 	}
 	if err != nil {
 		return err
@@ -105,7 +107,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	sAddrs, err := k.tryToCommitTransactionForSet(addresses, key, partID)
 	if err != nil {
 		// Undo the commit and set old value
-		currentValue, gErr := k.partitions.get(key, partID)
+		currentValue, gErr := k.partitions.find(key, partID)
 		if gErr == nil {
 			k.setOldValue(key, currentValue, partID, sAddrs)
 		}
@@ -118,7 +120,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		}
 		return err
 	}
-	return k.partitions.set(key, value, partID)
+	return k.partitions.insert(key, value, partID)
 }
 
 func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID int32) ([]string, error) {

@@ -19,7 +19,7 @@ func (k *KV) setBackup(key string, value []byte, ttl int64) error {
 	}
 
 	log.Debugf("Backup has been set for %s", key)
-	return k.backups.set(key, value, partID)
+	return k.backups.insert(key, value, partID)
 }
 
 func (k *KV) deleteBackup(key string) error {

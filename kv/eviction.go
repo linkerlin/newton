@@ -1,6 +1,11 @@
 package kv
 
-import "sync"
+import (
+	"encoding/binary"
+	"sync"
+
+	"github.com/purak/ghash"
+)
 
 const (
 	evictionLRU = "lru"
@@ -62,4 +67,22 @@ func (l *lru) pop(partID int32) []byte {
 	}
 	defer l.mu.Unlock()
 	return f.pop()
+}
+
+func (k *KV) setLRUItem(key string, partID int32) (uint64, error) {
+	mkey := []byte(key)
+	rrange := "-8"
+	rawPos, err := k.partitions.findWithRange(key, rrange, partID)
+	if err != nil && err == ghash.ErrKeyNotFound {
+		newPos, err := k.eviction.lru.pushBack(mkey, partID)
+		if err != nil {
+			return 0, err
+		}
+		return newPos, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	pos := binary.LittleEndian.Uint64(rawPos)
+	return k.eviction.lru.moveToBack(mkey, pos, partID)
 }

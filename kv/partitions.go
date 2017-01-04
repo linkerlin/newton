@@ -23,52 +23,69 @@ type partitions struct {
 	m map[int32]*ghash.GHash
 }
 
-func (pt *partitions) set(key string, value []byte, partID int32) error {
-	var err error
-	// Lock all kv store to find the responsible partition.
+func (pt *partitions) getGHash(partID int32, create bool) (*ghash.GHash, error) {
 	pt.mu.Lock()
+	defer pt.mu.Unlock()
+	var err error
 	gh, ok := pt.m[partID]
 	if !ok {
+		if !create {
+			return nil, ErrPartitionNotFound
+		}
 		cfg := newDefaultGHashConfig()
 		gh, err = ghash.New(cfg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		pt.m[partID] = gh
 	}
-	pt.mu.Unlock()
+	return gh, nil
+}
+
+func (pt *partitions) insert(key string, value []byte, partID int32) error {
+	gh, err := pt.getGHash(partID, true)
+	if err != nil {
+		return err
+	}
 	return gh.Insert(key, value)
 }
 
-func (pt *partitions) get(key string, partID int32) ([]byte, error) {
-	pt.mu.RLock()
-	gh, ok := pt.m[partID]
-	pt.mu.RUnlock()
-	if !ok {
-		// Partition could not be found for that key.
-		return nil, ErrPartitionNotFound
+func (pt *partitions) find(key string, partID int32) ([]byte, error) {
+	gh, err := pt.getGHash(partID, false)
+	if err != nil {
+		return nil, err
 	}
 	return gh.Find(key)
 }
 
 func (pt *partitions) delete(key string, partID int32) error {
-	pt.mu.RLock()
-	gh, ok := pt.m[partID]
-	pt.mu.RUnlock()
-	if !ok {
-		// Partition could not be found for that key.
-		return ErrPartitionNotFound
+	gh, err := pt.getGHash(partID, false)
+	if err != nil {
+		return err
 	}
 	return gh.Delete(key)
 }
 
 func (pt *partitions) check(key string, partID int32) error {
-	pt.mu.RLock()
-	gh, ok := pt.m[partID]
-	pt.mu.RUnlock()
-	if !ok {
-		// Partition could not be found for that key.
-		return ErrPartitionNotFound
+	gh, err := pt.getGHash(partID, false)
+	if err != nil {
+		return err
 	}
 	return gh.Check(key)
+}
+
+func (pt *partitions) findWithRange(key, rrange string, partID int32) ([]byte, error) {
+	gh, err := pt.getGHash(partID, false)
+	if err != nil {
+		return nil, err
+	}
+	return gh.FindWithRange(key, rrange)
+}
+
+func (pt *partitions) modify(key, rrange string, chunk []byte, partID int32) error {
+	gh, err := pt.getGHash(partID, false)
+	if err != nil {
+		return err
+	}
+	return gh.Modify(key, rrange, chunk)
 }

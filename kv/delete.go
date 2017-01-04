@@ -91,7 +91,7 @@ func (k *KV) Delete(key string) error {
 		log.Debugf("Calling CommitTransactionForDelete for %s on %s", key, addr)
 		if err := k.callCommitTransactionForDeleteOn(addr, key, partID); err != nil {
 			// re-set the key.
-			currentValue, gErr := k.partitions.get(key, partID)
+			currentValue, gErr := k.partitions.find(key, partID)
 			if gErr == nil {
 				log.Debugf("Commit operation on delete transaction failed on key: %s", key, err)
 				k.setOldValue(key, currentValue, partID, succesfullyDeleted)
