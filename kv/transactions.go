@@ -16,8 +16,8 @@ var ErrPartitionNotFound = errors.New("Partition not found")
 type transactions struct {
 	mu sync.RWMutex
 
-	set    map[int32]*ghash.GHash
-	delete map[int32]*ghash.GHash
+	set    map[int32]ghash.GHash
+	delete map[int32]ghash.GHash
 }
 
 func (k *KV) transactionForSet(key string, value []byte, ttl int64, partID int32) error {

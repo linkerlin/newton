@@ -20,22 +20,22 @@ var ErrKeyNotFound = errors.New("No value found for given key")
 type partitions struct {
 	mu sync.RWMutex
 
-	m map[int32]*ghash.GHash
+	m map[int32]ghash.GHash
 }
 
-func (pt *partitions) getGHash(partID int32, create bool) (*ghash.GHash, error) {
+func (pt *partitions) getGHash(partID int32, create bool) (ghash.GHash, error) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 	var err error
 	gh, ok := pt.m[partID]
 	if !ok {
 		if !create {
-			return nil, ErrPartitionNotFound
+			return ghash.GHash{}, ErrPartitionNotFound
 		}
 		cfg := newDefaultGHashConfig()
 		gh, err = ghash.New(cfg)
 		if err != nil {
-			return nil, err
+			return ghash.GHash{}, err
 		}
 		pt.m[partID] = gh
 	}

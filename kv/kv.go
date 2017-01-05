@@ -29,14 +29,14 @@ type KV struct {
 
 func New(cfg *config.KV, p *partition.Partition, router *httprouter.Router) *KV {
 	parts := &partitions{
-		m: make(map[int32]*ghash.GHash),
+		m: make(map[int32]ghash.GHash),
 	}
 	backups := &partitions{
-		m: make(map[int32]*ghash.GHash),
+		m: make(map[int32]ghash.GHash),
 	}
 	transactions := &transactions{
-		set:    make(map[int32]*ghash.GHash),
-		delete: make(map[int32]*ghash.GHash),
+		set:    make(map[int32]ghash.GHash),
+		delete: make(map[int32]ghash.GHash),
 	}
 
 	k := &KV{
