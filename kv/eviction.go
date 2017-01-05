@@ -73,7 +73,7 @@ func (k *KV) setLRUItem(key string, partID int32) (uint64, error) {
 	mkey := []byte(key)
 	rrange := "-8"
 	rawPos, err := k.partitions.findWithRange(key, rrange, partID)
-	if err != nil && err == ghash.ErrKeyNotFound {
+	if err != nil && (err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound) {
 		newPos, err := k.eviction.lru.pushBack(mkey, partID)
 		if err != nil {
 			return 0, err
