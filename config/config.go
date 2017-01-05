@@ -62,7 +62,7 @@ type Partition struct {
 }
 
 type KV struct {
-	EvictionPolicy     string `yaml:"eviction_policy"`
+	Eviction           bool   `yaml:"eviction"`
 	EvictionPercentage int    `yaml:"eviction_percentage"`
 	MaxSize            uint64 `yaml:"max_size"`
 }

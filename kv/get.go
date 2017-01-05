@@ -22,7 +22,7 @@ func (k *KV) Get(key string) ([]byte, error) {
 	defer k.locker.Unlock(key)
 
 	// We have the key. So you can update eviction data.
-	if k.config.EvictionPolicy == evictionLRU {
+	if k.config.Eviction {
 		if err = k.partitions.check(key, partID); err != nil {
 			return nil, err
 		}

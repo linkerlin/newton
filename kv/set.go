@@ -81,7 +81,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
-	if k.config.EvictionPolicy == evictionLRU {
+	if k.config.Eviction {
 		pos, err := k.setLRUItem(key, partID)
 		if err != nil {
 			return err

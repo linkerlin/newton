@@ -7,10 +7,6 @@ import (
 	"github.com/purak/ghash"
 )
 
-const (
-	evictionLRU = "lru"
-)
-
 type eviction struct {
 	lru lru
 }

@@ -51,7 +51,7 @@ func New(cfg *config.KV, p *partition.Partition, router *httprouter.Router) *KV 
 	}
 	k.time.insertClusterTime(p.GetClusterTime())
 
-	if k.config.EvictionPolicy == "lru" {
+	if k.config.Eviction {
 		k.eviction = eviction{
 			lru: lru{partitions: make(map[int32]*fifo)},
 		}
