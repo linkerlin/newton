@@ -130,6 +130,10 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 				return dErr
 			}
 		}
+		// Delete idle transactions
+		tAddrs := diffStringSlices(sAddrs, addresses)
+		// wait until done. if partition manager works properly, everything gonna be OK.
+		k.undoTransactionForSet(tAddrs, key, partID)
 		return err
 	}
 	return nil
@@ -245,4 +249,23 @@ func (k *KV) redirectSet(key string, value []byte, ttl int64, oAddr string) erro
 		return err
 	}
 	return nil
+}
+
+func diffStringSlices(slice1 []string, slice2 []string) []string {
+	var diff []string
+
+	for _, s1 := range slice1 {
+		found := false
+		for _, s2 := range slice2 {
+			if s1 == s2 {
+				found = true
+				break
+			}
+		}
+		// String not found. We add it to return slice
+		if !found {
+			diff = append(diff, s1)
+		}
+	}
+	return diff
 }
