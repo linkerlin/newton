@@ -104,23 +104,35 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		return err
 	}
 
+	// Start to commit the new item
+	currentValue, gErr := k.partitions.find(key, partID)
+	if gErr != nil && gErr != ghash.ErrKeyNotFound {
+		return gErr
+	}
+
+	if err := k.partitions.insert(key, value, partID); err != nil {
+		// It will do its job. Wait.
+		k.undoTransactionForSet(addresses, key, partID)
+		return err
+	}
+
 	sAddrs, err := k.tryToCommitTransactionForSet(addresses, key, partID)
 	if err != nil {
-		// Undo the commit and set old value
-		currentValue, gErr := k.partitions.find(key, partID)
 		if gErr == nil {
 			k.setOldValue(key, currentValue, partID, sAddrs)
+			if iErr := k.partitions.insert(key, currentValue, partID); iErr != nil {
+				return iErr
+			}
 		}
 		if gErr == ghash.ErrKeyNotFound {
 			k.deleteKeyFromBackups(key, partID, sAddrs)
-			gErr = nil
-		}
-		if gErr != nil {
-			return gErr
+			if dErr := k.partitions.delete(key, partID); err != nil {
+				return dErr
+			}
 		}
 		return err
 	}
-	return k.partitions.insert(key, value, partID)
+	return nil
 }
 
 func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID int32) ([]string, error) {
