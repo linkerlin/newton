@@ -106,10 +106,11 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 
 	// Start to commit the new item
 	currentValue, gErr := k.partitions.find(key, partID)
-	if gErr != nil && gErr != ghash.ErrKeyNotFound {
+	alreadyExist := !(gErr == ghash.ErrKeyNotFound || gErr == ErrPartitionNotFound)
+	if gErr != nil && alreadyExist {
 		return gErr
 	}
-	if k.config.Eviction {
+	if k.config.Eviction && alreadyExist {
 		lg := len(currentValue)
 		copy(currentValue[lg-8:lg], currentPos)
 	}
@@ -128,7 +129,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 				return iErr
 			}
 		}
-		if gErr == ghash.ErrKeyNotFound {
+		if gErr == ghash.ErrKeyNotFound || gErr == ErrPartitionNotFound {
 			k.deleteKeyFromBackups(key, partID, sAddrs)
 			if dErr := k.partitions.delete(key, partID); err != nil {
 				return dErr
@@ -150,7 +151,7 @@ func (k *KV) tryToCommitTransactionForSet(addresses []string, key string, partID
 	for _, bAddr := range addresses {
 		log.Debugf("Calling CommitTransactionForSet for %s on %s", key, bAddr)
 		if err := k.callCommitTransactionForSetOn(bAddr, key, partID); err != nil {
-			log.Errorf("Failed CallTransactionForSet: %s on %d", key, bAddr)
+			log.Errorf("Failed CallTransactionForSet: %s on %s: %s", key, bAddr, err)
 			return success, err
 		}
 		success = append(success, bAddr)
