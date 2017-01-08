@@ -58,10 +58,14 @@ func (k *KV) Delete(key string) error {
 	}
 
 	k.locker.Lock(key)
-	defer k.locker.Unlock(key)
+	defer func() {
+		if err = k.locker.Unlock(key); err != nil {
+			log.Errorf("Error while unlocking key %s: %s", key, err)
+		}
+	}()
 
 	// Ignore to run if given key doesn't exist in data store.
-	if k.partitions.check(key, partID); err != nil {
+	if err = k.partitions.check(key, partID); err != nil {
 		return err
 	}
 

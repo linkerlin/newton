@@ -136,7 +136,7 @@ func (k *KV) transactionForDelete(key string, partID int32) error {
 	gh, ok := k.transactions.delete[partID]
 	if !ok {
 		cfg := newDefaultGHashConfig()
-		gh, err := ghash.New(cfg)
+		gh, err = ghash.New(cfg)
 		if err != nil {
 			return err
 		}

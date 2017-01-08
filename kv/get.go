@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/purak/newton/log"
 	ksrv "github.com/purak/newton/proto/kv"
 )
 
@@ -18,9 +19,13 @@ func (k *KV) Get(key string) ([]byte, error) {
 	if !local {
 		return k.redirectGet(key, oAddr)
 	}
-	k.locker.Lock(key)
-	defer k.locker.Unlock(key)
 
+	k.locker.Lock(key)
+	defer func() {
+		if err = k.locker.Unlock(key); err != nil {
+			log.Errorf("Error while unlocking key %s: %s", key, err)
+		}
+	}()
 	if k.config.Eviction {
 		if err = k.partitions.check(key, partID); err != nil {
 			return nil, err

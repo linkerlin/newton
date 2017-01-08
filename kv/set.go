@@ -79,7 +79,11 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	}
 
 	k.locker.Lock(key)
-	defer k.locker.Unlock(key)
+	defer func() {
+		if err = k.locker.Unlock(key); err != nil {
+			log.Errorf("Error while unlocking key %s: %s", key, err)
+		}
+	}()
 
 	currentPos := make([]byte, 8)
 	var pos uint64
@@ -115,7 +119,7 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		copy(currentValue[lg-8:lg], currentPos)
 	}
 
-	if err := k.partitions.insert(key, value, partID); err != nil {
+	if err = k.partitions.insert(key, value, partID); err != nil {
 		// It will do its job. Wait.
 		k.undoTransactionForSet(addresses, key, partID)
 		return err
@@ -196,7 +200,7 @@ func (k *KV) setOldValue(key string, value []byte, partID int32, addresses []str
 		for _, bAddr := range addresses {
 			log.Debugf("Calling CommitTransactionForSet for %s on %s", key, bAddr)
 			if err := k.callCommitTransactionForSetOn(bAddr, key, partID); err != nil {
-				log.Errorf("Failed CallTransactionForSet: %s on %d", key, bAddr)
+				log.Errorf("Failed CallTransactionForSet: %s on %s: %s", key, bAddr, err)
 				failed = append(failed, bAddr)
 				continue
 			}

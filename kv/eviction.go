@@ -70,10 +70,10 @@ func (k *KV) setLRUItemOnSource(key string, partID int32) (uint64, error) {
 	mkey := []byte(key)
 	rrange := "-8"
 	rawPos, err := k.partitions.findWithRange(key, rrange, partID)
-	if err != nil && (err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound) {
-		newPos, err := k.eviction.source.pushBack(mkey, partID)
-		if err != nil {
-			return 0, err
+	if err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound {
+		newPos, pErr := k.eviction.source.pushBack(mkey, partID)
+		if pErr != nil {
+			return 0, pErr
 		}
 		return newPos, nil
 	}
@@ -88,10 +88,10 @@ func (k *KV) setLRUItemOnBackup(key string, partID int32) (uint64, error) {
 	mkey := []byte(key)
 	rrange := "-8"
 	rawPos, err := k.backups.findWithRange(key, rrange, partID)
-	if err != nil && (err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound) {
-		newPos, err := k.eviction.backup.pushBack(mkey, partID)
-		if err != nil {
-			return 0, err
+	if err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound {
+		newPos, pErr := k.eviction.backup.pushBack(mkey, partID)
+		if pErr != nil {
+			return 0, pErr
 		}
 		return newPos, nil
 	}
