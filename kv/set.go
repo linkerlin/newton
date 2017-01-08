@@ -81,17 +81,17 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
+	currentPos := make([]byte, 8)
+	var pos uint64
 	if k.config.Eviction {
-		pos, err := k.setLRUItem(key, partID)
+		pos, err = k.setLRUItemOnSource(key, partID)
 		if err != nil {
 			return err
 		}
-		bs := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bs, pos)
-		value = append(value, bs...)
+		binary.LittleEndian.PutUint64(currentPos, pos)
+		value = append(value, currentPos...)
 	}
 
-	// FIXME: k.partitions.set may return an error about memory allocation.
 	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
 		return k.partitions.insert(key, value, partID)
@@ -108,6 +108,10 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	currentValue, gErr := k.partitions.find(key, partID)
 	if gErr != nil && gErr != ghash.ErrKeyNotFound {
 		return gErr
+	}
+	if k.config.Eviction {
+		lg := len(currentValue)
+		copy(currentValue[lg-8:lg], currentPos)
 	}
 
 	if err := k.partitions.insert(key, value, partID); err != nil {

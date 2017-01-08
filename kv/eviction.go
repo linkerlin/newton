@@ -8,7 +8,8 @@ import (
 )
 
 type eviction struct {
-	lru lru
+	source lru
+	backup lru
 }
 
 type lru struct {
@@ -65,12 +66,12 @@ func (l *lru) pop(partID int32) []byte {
 	return f.pop()
 }
 
-func (k *KV) setLRUItem(key string, partID int32) (uint64, error) {
+func (k *KV) setLRUItemOnSource(key string, partID int32) (uint64, error) {
 	mkey := []byte(key)
 	rrange := "-8"
 	rawPos, err := k.partitions.findWithRange(key, rrange, partID)
 	if err != nil && (err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound) {
-		newPos, err := k.eviction.lru.pushBack(mkey, partID)
+		newPos, err := k.eviction.source.pushBack(mkey, partID)
 		if err != nil {
 			return 0, err
 		}
@@ -80,5 +81,23 @@ func (k *KV) setLRUItem(key string, partID int32) (uint64, error) {
 		return 0, err
 	}
 	pos := binary.LittleEndian.Uint64(rawPos)
-	return k.eviction.lru.moveToBack(mkey, pos, partID)
+	return k.eviction.source.moveToBack(mkey, pos, partID)
+}
+
+func (k *KV) setLRUItemOnBackup(key string, partID int32) (uint64, error) {
+	mkey := []byte(key)
+	rrange := "-8"
+	rawPos, err := k.backups.findWithRange(key, rrange, partID)
+	if err != nil && (err == ghash.ErrKeyNotFound || err == ErrPartitionNotFound) {
+		newPos, err := k.eviction.backup.pushBack(mkey, partID)
+		if err != nil {
+			return 0, err
+		}
+		return newPos, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	pos := binary.LittleEndian.Uint64(rawPos)
+	return k.eviction.backup.moveToBack(mkey, pos, partID)
 }

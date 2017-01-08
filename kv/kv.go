@@ -53,7 +53,8 @@ func New(cfg *config.KV, p *partition.Partition, router *httprouter.Router) *KV 
 
 	if k.config.Eviction {
 		k.eviction = eviction{
-			lru: lru{partitions: make(map[int32]*fifo)},
+			source: lru{partitions: make(map[int32]*fifo)},
+			backup: lru{partitions: make(map[int32]*fifo)},
 		}
 	}
 

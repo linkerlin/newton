@@ -21,13 +21,13 @@ func (k *KV) Get(key string) ([]byte, error) {
 	k.locker.Lock(key)
 	defer k.locker.Unlock(key)
 
-	// We have the key. So you can update eviction data.
 	if k.config.Eviction {
 		if err = k.partitions.check(key, partID); err != nil {
 			return nil, err
 		}
 
-		pos, err := k.setLRUItem(key, partID)
+		// We have the key. So you can update eviction data.
+		pos, err := k.setLRUItemOnSource(key, partID)
 		if err != nil {
 			return nil, err
 		}
@@ -42,6 +42,7 @@ func (k *KV) Get(key string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		// TODO: update bookkeeping data on partition members.
 		return value[:len(value)-8], nil
 	}
 	return k.partitions.find(key, partID)
