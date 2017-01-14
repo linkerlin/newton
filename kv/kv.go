@@ -18,7 +18,6 @@ type KV struct {
 	done      chan struct{}
 	partman   *partition.Partition
 
-	eviction     eviction
 	partitions   *partitions
 	transactions *transactions
 	backups      *partitions
@@ -50,13 +49,6 @@ func New(cfg *config.KV, p *partition.Partition, router *httprouter.Router) *KV 
 		locker:       locker.New(),
 	}
 	k.time.insertClusterTime(p.GetClusterTime())
-
-	if k.config.Eviction {
-		k.eviction = eviction{
-			source: lru{partitions: make(map[int32]*fifo)},
-			backup: lru{partitions: make(map[int32]*fifo)},
-		}
-	}
 
 	g := &Grpc{
 		kv: k,

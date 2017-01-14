@@ -1,8 +1,6 @@
 package kv
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 
 	"github.com/purak/newton/log"
@@ -20,18 +18,6 @@ func (k *KV) setBackup(key string, value []byte, ttl int64) error {
 		return ErrWrongBackupMember
 	}
 
-	if k.config.Eviction {
-		pos, err := k.setLRUItemOnBackup(key, partID)
-		if err != nil {
-			return err
-		}
-		currentPos := make([]byte, 8)
-		binary.LittleEndian.PutUint64(currentPos, pos)
-		lg := len(value)
-		if !bytes.Equal(value[lg-8:lg], currentPos) {
-			return errors.New("lru bookkeeping data is different")
-		}
-	}
 	log.Debugf("Backup has been set for %s", key)
 	return k.backups.insert(key, value, partID)
 }

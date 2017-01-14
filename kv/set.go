@@ -1,8 +1,6 @@
 package kv
 
 import (
-	"encoding/binary"
-
 	"github.com/purak/newton/log"
 	"github.com/purak/newton/partition"
 	"golang.org/x/net/context"
@@ -85,17 +83,6 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 		}
 	}()
 
-	currentPos := make([]byte, 8)
-	var pos uint64
-	if k.config.Eviction {
-		pos, err = k.setLRUItemOnSource(key, partID)
-		if err != nil {
-			return err
-		}
-		binary.LittleEndian.PutUint64(currentPos, pos)
-		value = append(value, currentPos...)
-	}
-
 	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {
 		return k.partitions.insert(key, value, partID)
@@ -113,10 +100,6 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 	alreadyExist := !(gErr == ghash.ErrKeyNotFound || gErr == ErrPartitionNotFound)
 	if gErr != nil && alreadyExist {
 		return gErr
-	}
-	if k.config.Eviction && alreadyExist {
-		lg := len(currentValue)
-		copy(currentValue[lg-8:lg], currentPos)
 	}
 
 	if err = k.partitions.insert(key, value, partID); err != nil {

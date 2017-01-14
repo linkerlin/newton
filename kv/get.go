@@ -1,8 +1,6 @@
 package kv
 
 import (
-	"encoding/binary"
-
 	"golang.org/x/net/context"
 
 	"github.com/purak/newton/log"
@@ -26,30 +24,6 @@ func (k *KV) Get(key string) ([]byte, error) {
 			log.Errorf("Error while unlocking key %s: %s", key, err)
 		}
 	}()
-	if k.config.Eviction {
-		if err = k.partitions.check(key, partID); err != nil {
-			return nil, err
-		}
-
-		// We have the key. So you can update eviction data.
-		pos, err := k.setLRUItemOnSource(key, partID)
-		if err != nil {
-			return nil, err
-		}
-		// Update bookkeeping data
-		rrange := "-8"
-		bs := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bs, pos)
-		if err = k.partitions.modify(key, rrange, bs, partID); err != nil {
-			return nil, err
-		}
-		value, err := k.partitions.find(key, partID)
-		if err != nil {
-			return nil, err
-		}
-		// TODO: update bookkeeping data on partition members.
-		return value[:len(value)-8], nil
-	}
 	return k.partitions.find(key, partID)
 }
 
