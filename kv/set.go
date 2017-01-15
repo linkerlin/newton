@@ -1,6 +1,8 @@
 package kv
 
 import (
+	"fmt"
+
 	"github.com/purak/newton/log"
 	"github.com/purak/newton/partition"
 	"golang.org/x/net/context"
@@ -82,6 +84,21 @@ func (k *KV) Set(key string, value []byte, ttl int64) error {
 			log.Errorf("Error while unlocking key %s: %s", key, err)
 		}
 	}()
+
+	// Add some bookkeeping data to delete key-value when ttl is exceeded.
+	fmt.Println("Without ttl: ", value)
+	if ttl != 0 {
+		now, err := k.time.now()
+		if err != nil {
+			return err
+		}
+		expireTime := now + ttl
+		fmt.Println(expireTime)
+		value = k.enableExpireOnValue(expireTime, value)
+	} else {
+		value = k.disableExpireOnValue(value)
+	}
+	fmt.Println("With ttl: ", value)
 
 	addresses, err := k.partman.FindBackupMembers(partID)
 	if err == partition.ErrNoBackupMemberFound {

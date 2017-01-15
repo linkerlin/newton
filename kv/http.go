@@ -23,8 +23,8 @@ func (k *KV) setHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	}
 
 	var ttl int64
-	ttlRaw := ps.ByName("ttl")
-	if len(strings.Trim(ttlRaw, " ")) != 0 {
+	ttlRaw := r.URL.Query().Get("ttl")
+	if strings.Trim(ttlRaw, " ") != "" {
 		ttl, err = strconv.ParseInt(ttlRaw, 10, 64)
 		if err != nil {
 			log.Errorf("[HTTP-KV-Set] Error while reading ttl for key %s: %s", key, err)

@@ -24,7 +24,18 @@ func (k *KV) Get(key string) ([]byte, error) {
 			log.Errorf("Error while unlocking key %s: %s", key, err)
 		}
 	}()
-	return k.partitions.find(key, partID)
+	value, err := k.partitions.find(key, partID)
+	if err != nil {
+		return nil, err
+	}
+	isExpired, err := k.isValueExpired(value)
+	if err != nil {
+		return nil, err
+	}
+	if isExpired {
+		return nil, ErrKeyNotFound
+	}
+	return value, nil
 }
 
 func (k *KV) redirectGet(key, oAddr string) ([]byte, error) {

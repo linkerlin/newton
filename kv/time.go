@@ -13,14 +13,14 @@ type clusterTime struct {
 	start int64
 }
 
-func (c *clusterTime) getClusterTime() (time.Duration, error) {
+func (c *clusterTime) now() (int64, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.start <= 0 {
 		return 0, errors.New("no cluster time to use")
 	}
 	now := time.Now().UnixNano()
-	return time.Duration(c.base + (now - c.start)), nil
+	return int64(time.Duration(c.base+(now-c.start)) / 1000000), nil
 }
 
 func (c *clusterTime) insertClusterTime(base int64) {
