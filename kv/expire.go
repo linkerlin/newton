@@ -41,7 +41,7 @@ func (k *KV) expireKeysFromKV() {
 	defer k.waitGroup.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	partitionID := 0
+	// partitionID := 0
 	for {
 		select {
 		case <-ticker.C:
